@@ -486,7 +486,6 @@ class VoiceController {
         return false;
       }
     }) || pyScriptCandidates[0];
-    const pythonBin = process.env.PYTHON || 'python';
     const spawnArgs = [pyScript, '--model', modelDir, '--sample-rate', String(this.sampleRate)];
     // eslint-disable-next-line no-console
     console.log('🐍 Python path:', process.env.PATH);
@@ -506,16 +505,31 @@ class VoiceController {
       console.log('❌ Python vosk script not found:', pyScript);
       return false;
     }
-    logVoiceTrace('python-vosk:spawn', { pythonBin, script: pyScript, modelDir });
+    const pythonCandidates = [
+      process.env.PYTHON || 'python',
+      'py',
+    ];
 
     const { spawn } = require('child_process');
-    try {
-      this._pythonProc = spawn(pythonBin, spawnArgs, {
-        stdio: ['pipe', 'pipe', 'pipe'],
-        windowsHide: true,
-      });
-    } catch (err) {
-      logVoiceError('Python spawn failed', err, { stage: '_tryStartPythonVosk' });
+    let spawnErr = null;
+    for (const candidate of pythonCandidates) {
+      const cmd = String(candidate || '').trim();
+      if (!cmd) continue;
+      const args = cmd.toLowerCase() === 'py' ? ['-3', ...spawnArgs] : spawnArgs;
+      try {
+        logVoiceTrace('python-vosk:spawn', { pythonBin: cmd, args: args.slice(0, 4), script: pyScript, modelDir });
+        this._pythonProc = spawn(cmd, args, {
+          stdio: ['pipe', 'pipe', 'pipe'],
+          windowsHide: true,
+        });
+        spawnErr = null;
+        break;
+      } catch (err) {
+        spawnErr = err;
+      }
+    }
+    if (!this._pythonProc) {
+      logVoiceError('Python spawn failed', spawnErr, { stage: '_tryStartPythonVosk' });
       return false;
     }
 
@@ -4874,9 +4888,10 @@ function registerIpc() {
       const controller = voiceController;
       if (!controller) return;
 
-      const normalized = voiceController.normalizeText(text);
+      const normalized = controller.normalizeText(text);
       // Если рендерер прислал "команду без wake word" — эмитим команду напрямую.
-      if (normalized && controller.wakeWordNormalized && !normalized.includes(controller.wakeWordNormalized)) {
+      const hasWake = controller.isWakeWord?.(normalized);
+      if (normalized && !hasWake) {
         if (typeof controller._emitCommand === 'function') controller._emitCommand(normalized, text);
         return;
       }

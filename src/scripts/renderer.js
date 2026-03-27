@@ -561,15 +561,41 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Получаем stream один раз и дальше гоняем PCM в main.
     // Важно: для части Windows-драйверов "жесткие" constraints дают нулевой сигнал.
     // Поэтому используем мягкие настройки (или системные дефолты).
-    voskStream = await navigator.mediaDevices.getUserMedia({
-      audio: {
-        channelCount: { ideal: 1 },
-        echoCancellation: { ideal: true },
-        noiseSuppression: { ideal: true },
-        autoGainControl: { ideal: true },
-      },
-      video: false,
-    });
+    const tryMic = async () => {
+      const variants = [
+        {
+          audio: {
+            channelCount: { ideal: 1 },
+            echoCancellation: { ideal: false },
+            noiseSuppression: { ideal: false },
+            autoGainControl: { ideal: false },
+          },
+          video: false,
+        },
+        {
+          audio: {
+            channelCount: { ideal: 1 },
+            echoCancellation: { ideal: true },
+            noiseSuppression: { ideal: true },
+            autoGainControl: { ideal: true },
+          },
+          video: false,
+        },
+        { audio: true, video: false },
+      ];
+      let lastErr = null;
+      for (const constraints of variants) {
+        try {
+          // eslint-disable-next-line no-await-in-loop
+          const s = await navigator.mediaDevices.getUserMedia(constraints);
+          return s;
+        } catch (err) {
+          lastErr = err;
+        }
+      }
+      throw lastErr || new Error('microphone_unavailable');
+    };
+    voskStream = await tryMic();
 
     voskPcmActive = true;
     voskReadyForPcm = false;

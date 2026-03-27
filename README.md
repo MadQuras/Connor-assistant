@@ -1,4 +1,4 @@
-# Connor Assistant (v2.0.0)
+# Connor Assistant (v2.0.1)
 
 Futuristic Electron assistant with voice wake-word, system monitoring, screenshots+OCR, reminders, DeepSeek chat, roulette casino, and macro automation.
 
@@ -60,6 +60,20 @@ The project uses `electron-builder` with NSIS installer:
 
 - Folder selection enabled
 - Desktop & Start Menu shortcuts enabled
+
+## Versioning Policy
+
+Project uses `MAJOR.MINOR.PATCH`:
+
+- `MAJOR` — global and breaking updates
+- `MINOR` — new features
+- `PATCH` — small fixes and minor updates
+
+Convenience commands:
+
+- `npm run version:major`
+- `npm run version:minor`
+- `npm run version:patch`
 
 ## Logs
 

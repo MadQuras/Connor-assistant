@@ -1,6 +1,6 @@
 {
   "name": "connor-assistant",
-  "version": "2.0.1",
+  "version": "2.0.2",
   "description": "Connor Assistant — голосовой ассистент для Windows с офлайн-распознаванием",
   "main": "main.js",
   "scripts": {
@@ -9,13 +9,16 @@
     "publish": "electron-builder --publish always",
     "release": "electron-builder --publish always --win",
     "pack": "electron-builder --dir",
-    "dist": "electron-builder"
+    "dist": "electron-builder",
+    "version:patch": "npm version patch",
+    "version:minor": "npm version minor",
+    "version:major": "npm version major"
   },
   "author": "MadQuras",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/MadQuras/connor-assistant.git"
+    "url": "https://github.com/MadQuras/Connor-assistant.git"
   },
   "build": {
     "appId": "com.connor.assistant",
@@ -38,6 +41,10 @@
         "from": "models/vosk-ru",
         "to": "models/vosk-ru",
         "filter": ["**/*"]
+      },
+      {
+        "from": "vosk_stream.py",
+        "to": "vosk_stream.py"
       }
     ],
     "win": {
@@ -57,7 +64,7 @@
     "publish": {
       "provider": "github",
       "owner": "MadQuras",
-      "repo": "connor-assistant",
+      "repo": "Connor-assistant",
       "private": false,
       "releaseType": "release"
     }
