@@ -117,12 +117,20 @@ contextBridge.exposeInMainWorld('api', {
   openMusicScanner: () => ipcRenderer.invoke('music:openScanner'),
   playlistGetAll: () => ipcRenderer.invoke('playlist:getAll'),
   playlistCreate: (name) => ipcRenderer.invoke('playlist:create', name),
+  playlistRename: (payload) => ipcRenderer.invoke('playlist:rename', payload),
   playlistDelete: (playlistId) => ipcRenderer.invoke('playlist:delete', playlistId),
   playlistSetActive: (playlistId) => ipcRenderer.invoke('playlist:setActive', playlistId),
   playlistAddTrack: (playlistId, track) => ipcRenderer.invoke('playlist:addTrack', playlistId, track),
+  playlistAddTrackByName: (payload) => ipcRenderer.invoke('playlist:addTrackByName', payload),
   playlistRemoveTrack: (playlistId, trackPath) => ipcRenderer.invoke('playlist:removeTrack', playlistId, trackPath),
+  musicSearch: (query, limit) => ipcRenderer.invoke('music:search', query, limit),
+  musicPlayUrl: (url) => ipcRenderer.invoke('music:play-url', url),
+  musicGetReleases: (payload) => ipcRenderer.invoke('music:getReleases', payload),
+  musicFavoritesGet: () => ipcRenderer.invoke('music:favorites:get'),
+  musicFavoritesToggle: (payload) => ipcRenderer.invoke('music:favorites:toggle', payload),
 
   onMusicStateChanged: (callback) => ipcRenderer.on('music:state-changed', (_event, data) => callback(data)),
+  onMusicPlayUrl: (callback) => ipcRenderer.on('music:play-url', (_event, data) => callback(data)),
 
   // Onboarding + cache.
   onboardingGetState: () => ipcRenderer.invoke('onboarding:getState'),

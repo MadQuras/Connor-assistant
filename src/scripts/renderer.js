@@ -343,7 +343,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   function showMainView() {
     setHidden(el.settingsView, true);
     setHidden(el.mainView, false);
-    setHidden(el.musicView, true);
     setHidden(document.getElementById('deepseekView'), true);
     setActiveTab('main');
   }
@@ -351,23 +350,23 @@ document.addEventListener('DOMContentLoaded', async () => {
   function showSettingsView() {
     setHidden(el.mainView, true);
     setHidden(el.settingsView, false);
-    setHidden(el.musicView, true);
     setHidden(document.getElementById('deepseekView'), true);
     setActiveTab('settings');
   }
 
-  function showMusicView() {
-    setHidden(el.mainView, true);
+  async function showMusicView() {
     setHidden(el.settingsView, true);
-    setHidden(el.musicView, false);
+    setHidden(el.mainView, false);
     setHidden(document.getElementById('deepseekView'), true);
     setActiveTab('music');
+    try {
+      await window.api?.musicOpenPlayerWindow?.();
+    } catch {}
   }
 
   function showDeepSeekView() {
     setHidden(el.settingsView, true);
     setHidden(el.mainView, true);
-    setHidden(el.musicView, true);
     setHidden(document.getElementById('deepseekView'), false);
     setActiveTab('chat');
   }
@@ -377,7 +376,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   el.tabMain?.addEventListener('click', () => showMainView());
   el.tabDeepseek?.addEventListener('click', () => showDeepSeekView());
-  el.tabMusic?.addEventListener('click', () => showMusicView());
+  el.tabMusic?.addEventListener('click', () => {
+    void showMusicView();
+  });
   el.tabSettings?.addEventListener('click', () => showSettingsView());
 
   setActiveTab('main');
@@ -999,6 +1000,47 @@ document.addEventListener('DOMContentLoaded', async () => {
           : 'Я умею: голосовые команды, музыку, скриншоты, таймеры и поиск в Google.');
       } else if (lowerCmd.startsWith('таймер на ')) {
         speak(isEn ? `Timer started. ${command}` : `Таймер запущен. ${command}`);
+      } else if (/^создай плейлист ["'](.+)["']$/i.test(lowerCmd)) {
+        const name = lowerCmd.match(/^создай плейлист ["'](.+)["']$/i)?.[1];
+        if (name) {
+          window.api?.playlistCreate?.(name).catch(() => {});
+          speak(`Плейлист "${name}" создан`);
+        }
+      } else if (/^удали плейлист ["'](.+)["']$/i.test(lowerCmd)) {
+        const name = lowerCmd.match(/^удали плейлист ["'](.+)["']$/i)?.[1];
+        if (name) {
+          window.api?.playlistGetAll?.().then((pls) => {
+            const target = (pls || []).find((p) => String(p?.name || '').toLowerCase() === String(name).toLowerCase());
+            if (target?.id) {
+              window.api?.playlistDelete?.(target.id).catch(() => {});
+              speak(`Плейлист "${name}" удалён`);
+            }
+          }).catch(() => {});
+        }
+      } else if (/^включи плейлист ["'](.+)["']$/i.test(lowerCmd)) {
+        const name = lowerCmd.match(/^включи плейлист ["'](.+)["']$/i)?.[1];
+        if (name) {
+          window.api?.playlistGetAll?.().then((pls) => {
+            const target = (pls || []).find((p) => String(p?.name || '').toLowerCase() === String(name).toLowerCase());
+            if (target?.id) {
+              window.api?.playlistSetActive?.(target.id).catch(() => {});
+              window.api?.musicOpenPlayerWindow?.().catch(() => {});
+              speak(`Включаю плейлист "${name}"`);
+            }
+          }).catch(() => {});
+        }
+      } else if (/^найди и включи (.+)$/i.test(lowerCmd)) {
+        const query = lowerCmd.match(/^найди и включи (.+)$/i)?.[1];
+        if (query) {
+          window.api?.musicSearch?.(query, 1).then((resp) => {
+            const track = resp?.items?.[0];
+            if (track?.url) window.api?.musicPlayUrl?.(track.url).catch(() => {});
+          }).catch(() => {});
+          speak(`Ищу и включаю ${query}`);
+        }
+      } else if (lowerCmd.includes('добавь в любимые') || lowerCmd.includes('лайк')) {
+        window.api?.musicOpenPlayerWindow?.().catch(() => {});
+        speak('Открой вкладку "Любимые" в плеере и нажми сердечко на треке');
       } else if (lowerCmd === 'останови таймер' || lowerCmd === 'стоп таймер' || lowerCmd === 'stop timer') {
         speak(isEn ? 'Timers stopped' : 'Таймеры остановлены');
       } else if (lowerCmd.startsWith('открой ')) {

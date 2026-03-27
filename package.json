@@ -1,6 +1,6 @@
 {
   "name": "connor-assistant",
-  "version": "2.0.2",
+  "version": "2.0.3",
   "description": "Connor Assistant — голосовой ассистент для Windows с офлайн-распознаванием",
   "main": "main.js",
   "scripts": {
@@ -43,6 +43,11 @@
         "filter": ["**/*"]
       },
       {
+        "from": "models/vosk-en",
+        "to": "models/vosk-en",
+        "filter": ["**/*"]
+      },
+      {
         "from": "vosk_stream.py",
         "to": "vosk_stream.py"
       }
@@ -76,11 +81,13 @@
     "electron-updater": "^6.1.7",
     "howler": "^2.2.4",
     "node-microphone": "^0.1.6",
+    "node-id3": "^0.2.9",
     "node-schedule": "^2.1.1",
     "robotjs": "^0.6.0",
     "screenshot-desktop": "^1.15.0",
     "systeminformation": "^5.21.8",
     "tesseract.js": "^7.0.0",
+    "youtube-search": "^1.1.6",
     "vosk": "^0.3.39"
   },
   "devDependencies": {

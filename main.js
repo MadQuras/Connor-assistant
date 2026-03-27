@@ -15,6 +15,16 @@ try {
 } catch {}
 
 const si = require('systeminformation');
+let yts = null;
+try {
+  // eslint-disable-next-line global-require
+  yts = require('youtube-search');
+} catch {}
+let NodeID3 = null;
+try {
+  // eslint-disable-next-line global-require
+  NodeID3 = require('node-id3');
+} catch {}
 async function getActiveWindow() {
   return null;
 }
@@ -64,6 +74,11 @@ const store = new Store({
       activeTrackIndex: 0,
     },
     musicTracks: [],
+    musicFavorites: [],
+    musicReleasesCache: {
+      ts: 0,
+      items: [],
+    },
     connorFloating: { x: null, y: null },
     floatingBounds: { x: null, y: null },
     autoUpdateEnabled: true,
@@ -382,6 +397,7 @@ class VoiceController {
     mainWindowGetter,
     wakeWord = 'коннор',
     voskModelPath = process.env.VOSK_MODEL_PATH || path.join(__dirname, 'models', 'vosk-ru'),
+    voskModelPathEn = process.env.VOSK_MODEL_PATH_EN || path.join(__dirname, 'models', 'vosk-en'),
     sampleRate = 16000,
   } = {}) {
     this.mainWindowGetter = mainWindowGetter;
@@ -389,6 +405,7 @@ class VoiceController {
     this.wakeWords = ['коннор', 'connor'];
     this.wakeWordNormalized = normalizeRuText(wakeWord);
     this._configuredVoskModelPath = voskModelPath;
+    this._configuredVoskModelPathEn = voskModelPathEn;
     this.voskModelPath = null;
     this.sampleRate = sampleRate;
 
@@ -429,7 +446,18 @@ class VoiceController {
   }
 
   refreshLanguage() {
+    const prev = this.language;
     this.language = String(store.get('language') || 'ru').toLowerCase() === 'en' ? 'en' : 'ru';
+    if (prev !== this.language && this._listening) {
+      try {
+        this.stopListening();
+      } catch {}
+      setTimeout(() => {
+        try {
+          this.startListening();
+        } catch {}
+      }, 120);
+    }
   }
 
   startListening() {
@@ -711,17 +739,27 @@ class VoiceController {
     }
   }
 
-  _resolveLocalVoskModelDir() {
-    const candidates = [
-      // Для установленного приложения.
-      path.join(process.resourcesPath, 'models', 'vosk-ru'),
-      // Для разработки.
-      path.join(__dirname, 'models', 'vosk-ru'),
-      // Для portable-версии.
-      path.join(process.cwd(), 'models', 'vosk-ru'),
-      // Пользовательский путь.
-      this._configuredVoskModelPath,
+  _getModelCandidates(lang = 'ru') {
+    const isEn = String(lang || '').toLowerCase() === 'en';
+    const preferred = isEn ? 'vosk-en' : 'vosk-ru';
+    const fallback = isEn ? 'vosk-ru' : 'vosk-en';
+    const configuredPreferred = isEn ? this._configuredVoskModelPathEn : this._configuredVoskModelPath;
+    const configuredFallback = isEn ? this._configuredVoskModelPath : this._configuredVoskModelPathEn;
+    return [
+      path.join(process.resourcesPath, 'models', preferred),
+      path.join(__dirname, 'models', preferred),
+      path.join(process.cwd(), 'models', preferred),
+      configuredPreferred,
+      // fallback model in case preferred language model is absent
+      path.join(process.resourcesPath, 'models', fallback),
+      path.join(__dirname, 'models', fallback),
+      path.join(process.cwd(), 'models', fallback),
+      configuredFallback,
     ];
+  }
+
+  _resolveLocalVoskModelDir(lang = 'ru') {
+    const candidates = this._getModelCandidates(lang);
 
     for (const dir of candidates) {
       if (!this._isSafeLocalPath(dir)) continue;
@@ -876,7 +914,7 @@ class VoiceController {
     try {
       initVoiceNetworkBlocker();
 
-      const modelDir = this._resolveLocalVoskModelDir();
+      const modelDir = this._resolveLocalVoskModelDir(this.language);
       if (!modelDir) {
         this.voskModelPath = null;
         // eslint-disable-next-line no-console
@@ -884,10 +922,7 @@ class VoiceController {
         logVoiceError('Vosk model not found locally', null, {
           stage: 'resolveLocalVoskModelDir',
           candidates: [
-            path.join(process.resourcesPath, 'models', 'vosk-ru'),
-            path.join(__dirname, 'models', 'vosk-ru'),
-            path.join(process.cwd(), 'models', 'vosk-ru'),
-            this._configuredVoskModelPath,
+            ...this._getModelCandidates(this.language),
           ],
         });
 
@@ -4409,9 +4444,10 @@ function createMusicPlayerFullWindow() {
   if (musicPlayerFullWindow && !musicPlayerFullWindow.isDestroyed()) return musicPlayerFullWindow;
   const p = path.join(__dirname, 'src', 'music-player-window.html');
   musicPlayerFullWindow = new BrowserWindow({
-    width: 900,
-    height: 600,
+    width: 1200,
+    height: 700,
     show: false,
+    autoHideMenuBar: true,
     backgroundColor: '#050510',
     title: 'Music Player - Connor Assistant',
     webPreferences: {
@@ -4446,6 +4482,15 @@ function createMusicPlayerFullWindow() {
   return musicPlayerFullWindow;
 }
 
+function emitMusicStateChanged(reason = 'update') {
+  try {
+    mainWindow?.webContents?.send('music:state-changed', { reason });
+  } catch {}
+  try {
+    musicPlayerFullWindow?.webContents?.send('music:state-changed', { reason });
+  } catch {}
+}
+
 function sendPlannerUpdate() {
   try {
     if (!plannerWindow || plannerWindow.isDestroyed()) return;
@@ -4456,7 +4501,7 @@ function sendPlannerUpdate() {
 }
 
 async function scanMp3FilesFromRoots(roots, { maxFiles = 5000 } = {}) {
-  const extensions = new Set(['.mp3']);
+  const extensions = new Set(['.mp3', '.flac', '.wav', '.m4a', '.aac', '.ogg']);
   const results = [];
   const visited = new Set();
 
@@ -4489,6 +4534,7 @@ async function scanMp3FilesFromRoots(roots, { maxFiles = 5000 } = {}) {
         path: fullPath,
         title: path.basename(entry.name, ext),
         duration: 0,
+        thumbnail: '',
       });
     }
   }
@@ -4502,6 +4548,62 @@ async function scanMp3FilesFromRoots(roots, { maxFiles = 5000 } = {}) {
 
   return results;
 }
+
+function tryReadEmbeddedCoverDataUrl(filePath) {
+  try {
+    if (!NodeID3 || !filePath) return '';
+    const tags = NodeID3.read(filePath);
+    const imageBuffer = tags?.image?.imageBuffer;
+    if (!imageBuffer || !Buffer.isBuffer(imageBuffer)) return '';
+    const mime = tags?.image?.mime || 'image/jpeg';
+    return `data:${mime};base64,${imageBuffer.toString('base64')}`;
+  } catch {
+    return '';
+  }
+}
+
+class MusicSearchController {
+  async searchTracks(query, limit = 20) {
+    const q = String(query || '').trim();
+    const max = Math.max(1, Math.min(50, Number(limit) || 20));
+    if (!q || !yts) return [];
+
+    const apiKey = process.env.YOUTUBE_API_KEY || process.env.YT_API_KEY || '';
+    return new Promise((resolve) => {
+      yts(
+        q,
+        {
+          maxResults: max,
+          type: 'video',
+          key: apiKey || undefined,
+        },
+        (err, results) => {
+          if (err || !Array.isArray(results)) {
+            resolve([]);
+            return;
+          }
+          const items = results.map((video) => ({
+            id: String(video.id || ''),
+            title: String(video.title || 'Unknown title'),
+            artist: String(video.channelTitle || video.channel || 'Unknown artist'),
+            duration: String(video.duration || ''),
+            thumbnail: String(video?.thumbnails?.high?.url || video?.thumbnails?.default?.url || ''),
+            url: `https://youtube.com/watch?v=${String(video.id || '')}`,
+            source: 'youtube',
+          })).filter((x) => x.id);
+          resolve(items);
+        },
+      );
+    });
+  }
+
+  async getTrending(limit = 20) {
+    // Lightweight fallback query for "new music".
+    return this.searchTracks('new music this week', limit);
+  }
+}
+
+const musicSearchController = new MusicSearchController();
 
 function registerIpc() {
   ipcMain.handle('app:getVersion', () => app.getVersion());
@@ -5271,6 +5373,8 @@ function registerIpc() {
     const activePlaylist = playlists.find((p) => p?.id === activePlaylistId) || playlists[0] || { id: activePlaylistId, name: 'Мои треки', tracks: [] };
     const tracks = Array.isArray(activePlaylist.tracks) ? activePlaylist.tracks : [];
     const activeTrackIndex = tracks.length ? Math.max(0, Math.min(activeTrackIndexRaw, tracks.length - 1)) : 0;
+    const favorites = Array.isArray(store.get('musicFavorites')) ? store.get('musicFavorites') : [];
+    const releases = store.get('musicReleasesCache') || { ts: 0, items: [] };
 
     return {
       volume,
@@ -5279,7 +5383,54 @@ function registerIpc() {
       activeTrackIndex,
       activePlaylistName: activePlaylist.name || 'Мои треки',
       tracks,
+      favorites,
+      releases: {
+        ts: Number(releases?.ts) || 0,
+        items: Array.isArray(releases?.items) ? releases.items : [],
+      },
+      account: {
+        userName: String(store.get('userName') || 'Connor User'),
+      },
     };
+  });
+
+  ipcMain.handle('music:search', async (_event, query, limit) => {
+    try {
+      const items = await musicSearchController.searchTracks(query, limit);
+      return { ok: true, items };
+    } catch (err) {
+      return { ok: false, error: err?.message || String(err), items: [] };
+    }
+  });
+
+  ipcMain.handle('music:getReleases', async (_event, payload) => {
+    try {
+      const force = !!payload?.force;
+      const cache = store.get('musicReleasesCache') || { ts: 0, items: [] };
+      const now = Date.now();
+      const fresh = (now - (Number(cache?.ts) || 0)) < (24 * 60 * 60 * 1000);
+      if (!force && fresh && Array.isArray(cache?.items) && cache.items.length) {
+        return { ok: true, items: cache.items, ts: cache.ts, cached: true };
+      }
+      const items = await musicSearchController.getTrending(20);
+      store.set('musicReleasesCache', { ts: now, items });
+      return { ok: true, items, ts: now, cached: false };
+    } catch (err) {
+      return { ok: false, error: err?.message || String(err), items: [] };
+    }
+  });
+
+  ipcMain.handle('music:play-url', (_event, url) => {
+    try {
+      const u = String(url || '').trim();
+      if (!u) return { ok: false, error: 'url_required' };
+      if (musicPlayerFullWindow && !musicPlayerFullWindow.isDestroyed()) {
+        musicPlayerFullWindow.webContents.send('music:play-url', { url: u });
+      }
+      return { ok: true };
+    } catch (err) {
+      return { ok: false, error: err?.message || String(err) };
+    }
   });
 
   ipcMain.handle('music:setVolume', (_event, volume) => {
@@ -5287,6 +5438,7 @@ function registerIpc() {
     if (!Number.isFinite(v)) return { ok: false, error: 'invalid_volume' };
     const clamped = Math.max(0, Math.min(1, v));
     store.set('music.volume', clamped);
+    emitMusicStateChanged('music:setVolume');
     return { ok: true, volume: clamped };
   });
 
@@ -5294,6 +5446,7 @@ function registerIpc() {
     const i = Number(index);
     if (!Number.isFinite(i)) return { ok: false, error: 'invalid_index' };
     store.set('music.activeTrackIndex', i);
+    emitMusicStateChanged('music:setActiveTrack');
     return { ok: true, activeTrackIndex: i };
   });
 
@@ -5319,14 +5472,16 @@ function registerIpc() {
     }
     if (!Array.isArray(playlists[activeIndex].tracks)) playlists[activeIndex].tracks = [];
 
-    playlists[activeIndex].tracks.push({ path: filePath, title });
+    const thumbnail = tryReadEmbeddedCoverDataUrl(filePath);
+    playlists[activeIndex].tracks.push({ path: filePath, title, thumbnail });
     const nextTrackIndex = playlists[activeIndex].tracks.length - 1;
 
     store.set('music.playlists', playlists);
     store.set('music.activePlaylistId', playlists[activeIndex].id);
     store.set('music.activeTrackIndex', nextTrackIndex);
+    emitMusicStateChanged('music:addTrack');
 
-    return { ok: true, added: { path: filePath, title }, activeTrackIndex: nextTrackIndex };
+    return { ok: true, added: { path: filePath, title, thumbnail }, activeTrackIndex: nextTrackIndex };
   });
 
   ipcMain.handle('music:openScanner', () => {
@@ -5359,10 +5514,12 @@ function registerIpc() {
         path: t.path,
         title: t.title || path.basename(t.path, path.extname(t.path)),
         duration: typeof t.duration === 'number' ? t.duration : 0,
+        thumbnail: String(t.thumbnail || ''),
       });
     }
     const unique = [...map.values()];
     store.set('musicTracks', unique);
+    emitMusicStateChanged('music:scan');
     return unique;
   });
 
@@ -5386,7 +5543,22 @@ function registerIpc() {
     store.set('music.playlists', playlists);
     store.set('music.activePlaylistId', id);
     store.set('music.activeTrackIndex', 0);
+    emitMusicStateChanged('playlist:create');
     return next;
+  });
+
+  ipcMain.handle('playlist:rename', (_event, payload) => {
+    const id = String(payload?.id || '');
+    const name = String(payload?.name || '').trim();
+    if (!id || !name) return { ok: false, error: 'invalid_payload' };
+    const music = store.get('music') || {};
+    const playlists = Array.isArray(music.playlists) ? music.playlists : [];
+    const target = playlists.find((p) => String(p?.id) === id);
+    if (!target) return { ok: false, error: 'playlist_not_found' };
+    target.name = name;
+    store.set('music.playlists', playlists);
+    emitMusicStateChanged('playlist:rename');
+    return { ok: true };
   });
 
   ipcMain.handle('playlist:delete', (_event, playlistId) => {
@@ -5405,6 +5577,7 @@ function registerIpc() {
     store.set('music.playlists', playlists);
     store.set('music.activePlaylistId', nextActive);
     store.set('music.activeTrackIndex', 0);
+    emitMusicStateChanged('playlist:delete');
     return playlists;
   });
 
@@ -5416,6 +5589,7 @@ function registerIpc() {
     if (!exists) return { ok: false, error: 'playlist_not_found' };
     store.set('music.activePlaylistId', playlistId);
     store.set('music.activeTrackIndex', 0);
+    emitMusicStateChanged('playlist:setActive');
     return { ok: true };
   });
 
@@ -5438,6 +5612,10 @@ function registerIpc() {
       path: trackPath,
       title,
       duration: typeof track?.duration === 'number' ? track.duration : 0,
+      thumbnail: String(track?.thumbnail || tryReadEmbeddedCoverDataUrl(trackPath) || ''),
+      artist: String(track?.artist || ''),
+      url: String(track?.url || ''),
+      id: String(track?.id || ''),
     });
 
     store.set('music.playlists', playlists);
@@ -5448,10 +5626,60 @@ function registerIpc() {
       // activeTrackIndex можно обновлять только при явном выборе трека пользователем.
     }
 
-    try {
-      mainWindow?.webContents?.send('music:state-changed', { reason: 'playlist:addTrack', playlistId: idStr });
-    } catch {}
+    emitMusicStateChanged('playlist:addTrack');
     return { ok: true };
+  });
+
+  ipcMain.handle('playlist:addTrackByName', (_event, payload) => {
+    const playlistName = String(payload?.playlistName || '').trim().toLowerCase();
+    const track = payload?.track || {};
+    if (!playlistName) return { ok: false, error: 'playlist_name_required' };
+    const music = store.get('music') || {};
+    const playlists = Array.isArray(music.playlists) ? music.playlists : [];
+    const pl = playlists.find((p) => String(p?.name || '').trim().toLowerCase() === playlistName);
+    if (!pl) return { ok: false, error: 'playlist_not_found' };
+    const tp = String(track?.path || track?.url || '').trim();
+    if (!tp) return { ok: false, error: 'invalid_track' };
+    if (!Array.isArray(pl.tracks)) pl.tracks = [];
+    if (!pl.tracks.some((t) => String(t?.path || t?.url || '') === tp)) {
+      pl.tracks.push({
+        id: String(track?.id || ''),
+        path: String(track?.path || ''),
+        url: String(track?.url || ''),
+        title: String(track?.title || 'Track'),
+        artist: String(track?.artist || ''),
+        duration: track?.duration || 0,
+        thumbnail: String(track?.thumbnail || ''),
+      });
+      store.set('music.playlists', playlists);
+      emitMusicStateChanged('playlist:addTrackByName');
+    }
+    return { ok: true };
+  });
+
+  ipcMain.handle('music:favorites:get', () => {
+    return Array.isArray(store.get('musicFavorites')) ? store.get('musicFavorites') : [];
+  });
+
+  ipcMain.handle('music:favorites:toggle', (_event, payload) => {
+    const track = payload?.track || {};
+    const key = String(track?.id || track?.path || track?.url || '').trim();
+    if (!key) return { ok: false, error: 'invalid_track' };
+    let favorites = Array.isArray(store.get('musicFavorites')) ? store.get('musicFavorites') : [];
+    const idx = favorites.findIndex((t) => String(t?.id || t?.path || t?.url || '') === key);
+    if (idx >= 0) {
+      favorites.splice(idx, 1);
+      store.set('musicFavorites', favorites);
+      emitMusicStateChanged('favorites:remove');
+      return { ok: true, favorite: false, favorites };
+    }
+    favorites.push({
+      ...track,
+      addedAt: Date.now(),
+    });
+    store.set('musicFavorites', favorites);
+    emitMusicStateChanged('favorites:add');
+    return { ok: true, favorite: true, favorites };
   });
 
   ipcMain.handle('playlist:removeTrack', (_event, playlistId, trackPath) => {

@@ -27,3 +27,4 @@ userData/
 models/*.onnx
 models/*.bin
 models/vosk-ru/
+models/vosk-en/

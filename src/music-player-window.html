@@ -3,42 +3,118 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <title>Music Player</title>
+    <title>Connor Music</title>
     <link rel="stylesheet" href="./styles/music-player.css" />
-    <script src="../node_modules/howler/dist/howler.min.js"></script>
   </head>
   <body>
-    <div class="root">
-      <header class="top">
-        <input id="searchInput" type="text" placeholder="Поиск по трекам..." />
-        <button id="btnScan">Сканировать</button>
-        <button id="btnAdd">Добавить файл</button>
-      </header>
-      <div class="grid">
-        <section class="left">
-          <div class="cover">♫</div>
-          <div id="nowTitle" class="now">—</div>
-          <input id="progress" type="range" min="0" max="100" value="0" />
-          <div class="controls">
-            <button id="btnPrev">⏮</button>
-            <button id="btnPlay">▶</button>
-            <button id="btnNext">⏭</button>
-          </div>
-        </section>
-        <section class="right">
-          <div class="row">
+    <div class="music-player">
+      <aside class="sidebar">
+        <div class="logo">CONNOR MUSIC</div>
+        <nav class="nav">
+          <button class="nav-btn active" data-tab="playlists">Плейлисты</button>
+          <button class="nav-btn" data-tab="favorites">Любимые</button>
+          <button class="nav-btn" data-tab="search">Поиск</button>
+          <button class="nav-btn" data-tab="new">Новинки</button>
+          <button class="nav-btn" data-tab="account">Аккаунт</button>
+        </nav>
+      </aside>
+
+      <section class="main-content">
+        <div class="tab-content active" id="playlists-tab">
+          <div class="toolbar">
             <select id="playlistSelect"></select>
-            <button id="btnNewPlaylist">+</button>
-            <button id="btnDeletePlaylist">−</button>
+            <button id="btnNewPlaylist">+ Плейлист</button>
+            <button id="btnRenamePlaylist">Переименовать</button>
+            <button id="btnDeletePlaylist">Удалить</button>
+            <button id="btnAddLocalTrack">+ Трек</button>
+            <button id="btnScan">Сканировать</button>
           </div>
-          <div id="trackList" class="list"></div>
-        </section>
-      </div>
-      <footer>
-        <div class="title">Очередь</div>
-        <div id="queueList" class="queue"></div>
-      </footer>
+          <div id="playlistTracks" class="track-list"></div>
+        </div>
+
+        <div class="tab-content" id="favorites-tab">
+          <div class="toolbar">
+            <button id="btnFavoritesToPlaylist">Собрать плейлист из любимых</button>
+          </div>
+          <div id="favoritesTracks" class="track-list"></div>
+        </div>
+
+        <div class="tab-content" id="search-tab">
+          <div class="toolbar">
+            <input type="text" id="searchInput" placeholder="Найти песню, исполнителя..." />
+            <button id="btnSearch">Найти</button>
+          </div>
+          <div id="searchResults" class="track-list"></div>
+        </div>
+
+        <div class="tab-content" id="new-tab">
+          <div class="toolbar">
+            <button id="btnRefreshNew">Обновить</button>
+          </div>
+          <div id="newTracks" class="track-list"></div>
+        </div>
+
+        <div class="tab-content" id="account-tab">
+          <div class="account-card">
+            <div class="account-line"><span>Пользователь:</span><strong id="accountName">—</strong></div>
+            <div class="account-line"><span>Плейлистов:</span><strong id="accountPlaylists">0</strong></div>
+            <div class="account-line"><span>Любимых треков:</span><strong id="accountFavorites">0</strong></div>
+            <div class="account-line">
+              <span>Качество звука:</span>
+              <select id="audioQuality">
+                <option value="low">Низкое</option>
+                <option value="medium" selected>Среднее</option>
+                <option value="high">Высокое</option>
+              </select>
+            </div>
+          </div>
+        </div>
+      </section>
     </div>
+
+    <footer class="player-bar">
+      <div class="track-info">
+        <img id="nowCover" alt="" />
+        <div class="meta">
+          <div id="nowTitle">—</div>
+          <div id="nowArtist">—</div>
+        </div>
+      </div>
+      <div class="player-controls">
+        <button id="btnPrev">⏮</button>
+        <button id="btnPlay">▶</button>
+        <button id="btnNext">⏭</button>
+      </div>
+      <div class="seek-wrap">
+        <span id="currentTime">0:00</span>
+        <input id="progress" type="range" min="0" max="100" value="0" />
+        <span id="totalTime">0:00</span>
+      </div>
+      <div class="volume-control">
+        <input id="volume" type="range" min="0" max="100" value="70" />
+      </div>
+      <button id="btnEq" class="equalizer-btn">EQ</button>
+    </footer>
+
+    <div id="eqModal" class="eq-modal hidden">
+      <div class="eq-card">
+        <div class="eq-head">
+          <strong>Эквалайзер</strong>
+          <button id="btnEqClose">✕</button>
+        </div>
+        <div class="eq-presets">
+          <button class="preset" data-preset="normal">Нормальный</button>
+          <button class="preset" data-preset="bass">Басы</button>
+          <button class="preset" data-preset="treble">Высокие</button>
+          <button class="preset" data-preset="classic">Классика</button>
+          <button class="preset" data-preset="rock">Рок</button>
+          <button class="preset" data-preset="electronic">Электро</button>
+        </div>
+        <div id="eqBands" class="eq-bands"></div>
+        <button id="btnEqReset">Сброс</button>
+      </div>
+    </div>
+
     <script src="./music-player-full.js" defer></script>
   </body>
-  </html>
+</html>

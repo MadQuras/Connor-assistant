@@ -195,47 +195,6 @@
         </section>
       </main>
 
-      <main id="musicView" class="view hidden">
-        <section class="card music-card">
-          <div class="section-title">Музыка</div>
-          <div class="music-player">
-            <div class="player-controls">
-              <button id="prevBtn" type="button" class="music-btn">⏮</button>
-              <button id="playPauseBtn" type="button" class="music-btn">▶</button>
-              <button id="nextBtn" type="button" class="music-btn">⏭</button>
-              <div class="volume">
-                <input type="range" id="volumeSlider" min="0" max="100" value="70" />
-              </div>
-            </div>
-
-            <div class="player-progress">
-              <span id="currentTime">0:00</span>
-              <input type="range" id="progressBar" min="0" max="100" value="0" />
-              <span id="totalTime">0:00</span>
-            </div>
-
-            <div class="music-scanbar">
-              <button id="scanMusicBtn" type="button" class="music-add">📁 Сканировать</button>
-              <span id="musicTracksCount" style="opacity: 0.75;">—</span>
-            </div>
-
-            <div class="playlist">
-              <div class="playlist-header">
-                <span>ПЛЕЙЛИСТ</span>
-                <select id="playlistSelect" class="playlist-select"></select>
-                <button id="newPlaylistBtn" type="button" class="music-add">+</button>
-                <button id="deletePlaylistBtn" type="button" class="music-add">🗑</button>
-              </div>
-              <div class="tracks-header">
-                <span>ТРЕКИ</span>
-                <button id="addTrackBtn" type="button" class="music-add">➕</button>
-              </div>
-              <div id="trackList"></div>
-            </div>
-          </div>
-        </section>
-      </main>
-
       <main id="deepseekView" class="view hidden">
         <section class="card deepseek-card">
           <div class="deepseek-toolbar">
