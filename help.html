@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Connor Assistant Help</title>
+    <style>
+      body {
+        margin: 0;
+        font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+        background: #050510;
+        color: #e9fbff;
+        padding: 22px;
+        line-height: 1.45;
+      }
+      h1, h2 { margin-top: 18px; }
+      code {
+        background: rgba(255,255,255,0.08);
+        padding: 2px 6px;
+        border-radius: 8px;
+        border: 1px solid rgba(255,255,255,0.12);
+      }
+      .box {
+        background: rgba(255,255,255,0.04);
+        border: 1px solid rgba(255,255,255,0.08);
+        border-radius: 16px;
+        padding: 14px 16px;
+        margin-top: 12px;
+      }
+      .muted { opacity: 0.8; }
+      ul { margin: 8px 0 0 18px; }
+    </style>
+  </head>
+  <body>
+    <h1>Connor Assistant — Помощь</h1>
+    <div class="muted">Версия приложения определяется содержимым `package.json` (сейчас v2.0.0).</div>
+
+    <div class="box">
+      <h2>Голосовые команды</h2>
+      <div class="muted">Wake word: <code>«Коннор»</code></div>
+      <ul>
+        <li><code>Коннор, запусти макрос 1</code> — выполнение макроса #1</li>
+        <li><code>Коннор, сделай скриншот</code> — полный экран + OCR + копирование текста</li>
+        <li><code>Коннор, сделай скриншот области</code> — выделение области мышью (прозрачный оверлей) + OCR + копирование</li>
+        <li><code>Коннор, спроси у DeepSeek ...</code> — запрос в DeepSeek и показ ответа в “DeepSeek Chat”</li>
+        <li><code>Коннор, напомни через 5 минут про встречу</code> — одноразовое напоминание</li>
+        <li><code>Коннор, напомни через 10 минут ежедневно про работу</code> — ежедневное</li>
+        <li><code>Коннор, напомни через 1 час еженедельно про спорт</code> — еженедельное</li>
+      </ul>
+    </div>
+
+    <div class="box">
+      <h2>Горячие клавиши (по умолчанию)</h2>
+      <ul>
+        <li><code>Ctrl+Shift+T</code> — показать/скрыть окно</li>
+        <li><code>Ctrl+Shift+M</code> — заглушить/включить звук</li>
+        <li><code>Ctrl+Shift+B</code> — открыть браузер</li>
+        <li><code>Ctrl+Shift+R</code> — запустить распознавание голоса</li>
+        <li><code>Ctrl+Shift+Q</code> — выход</li>
+      </ul>
+      <div class="muted">Назначение можно изменить в Settings → “Горячие клавиши”.</div>
+    </div>
+
+    <div class="box">
+      <h2>Скриншоты и OCR</h2>
+      <div>PNG сохраняются в:</div>
+      <div><code>./screenshots/screenshot_YYYY-MM-DD_HH-mm-ss.png</code></div>
+      <div class="muted">Распознанный текст копируется в буфер обмена.</div>
+    </div>
+
+    <div class="box">
+      <h2>DeepSeek Chat</h2>
+      <ul>
+        <li>Ключ API задаётся в Settings → “DeepSeek API”</li>
+        <li>История диалогов сохраняется в store</li>
+        <li>Ответ можно озвучивать через SpeechSynthesis</li>
+      </ul>
+    </div>
+  </body>
+</html>
+

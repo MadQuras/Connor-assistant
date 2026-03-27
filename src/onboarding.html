@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Connor Onboarding</title>
+    <link rel="stylesheet" href="./styles/onboarding.css" />
+  </head>
+  <body>
+    <main class="onb-root">
+      <h1>Connor Assistant</h1>
+      <p class="sub">Первичная настройка</p>
+
+      <label class="field">
+        <span>Как тебя зовут?</span>
+        <input id="userNameInput" type="text" placeholder="Введите имя" maxlength="48" />
+      </label>
+
+      <label class="row">
+        <input id="scanFoldersInput" type="checkbox" checked />
+        <span>Сканировать папки</span>
+      </label>
+
+      <label class="row">
+        <input id="findGamesInput" type="checkbox" />
+        <span>Искать игры</span>
+      </label>
+
+      <button id="btnStart" class="start-btn" type="button">Начать</button>
+      <div class="progress">
+        <div id="progressFill" class="progress-fill"></div>
+      </div>
+      <div id="status" class="status">Готово</div>
+    </main>
+
+    <script>
+      const el = {
+        userNameInput: document.getElementById('userNameInput'),
+        scanFoldersInput: document.getElementById('scanFoldersInput'),
+        findGamesInput: document.getElementById('findGamesInput'),
+        btnStart: document.getElementById('btnStart'),
+        progressFill: document.getElementById('progressFill'),
+        status: document.getElementById('status'),
+      };
+
+      function setProgress(v) {
+        const n = Math.max(0, Math.min(100, Number(v) || 0));
+        if (el.progressFill) el.progressFill.style.width = `${n}%`;
+      }
+
+      async function bootstrap() {
+        const st = await window.api?.onboardingGetState?.().catch(() => null);
+        if (st?.userName && el.userNameInput) el.userNameInput.value = st.userName;
+        if (st?.options) {
+          if (el.scanFoldersInput) el.scanFoldersInput.checked = st.options.scanFolders !== false;
+          if (el.findGamesInput) el.findGamesInput.checked = !!st.options.findGames;
+        }
+      }
+
+      el.btnStart?.addEventListener('click', async () => {
+        try {
+          el.btnStart.disabled = true;
+          setProgress(12);
+          if (el.status) el.status.textContent = 'Подготовка...';
+          await new Promise((r) => setTimeout(r, 120));
+          setProgress(35);
+          if (el.status) el.status.textContent = 'Сканирование...';
+          const resp = await window.api?.onboardingComplete?.({
+            name: String(el.userNameInput?.value || '').trim(),
+            scanFolders: !!el.scanFoldersInput?.checked,
+            findGames: !!el.findGamesInput?.checked,
+          });
+          setProgress(100);
+          if (!resp?.ok) throw new Error(resp?.error || 'onboarding_failed');
+          if (el.status) el.status.textContent = 'Готово';
+        } catch (err) {
+          if (el.status) el.status.textContent = `Ошибка: ${err?.message || String(err)}`;
+          el.btnStart.disabled = false;
+          setProgress(0);
+        }
+      });
+
+      bootstrap();
+    </script>
+  </body>
+  </html>

@@ -1,0 +1,52 @@
+html,
+body {
+  margin: 0;
+  background: #050510;
+  color: #e9f2ff;
+  font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+}
+
+.root {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 100vh;
+  padding: 18px;
+}
+
+h1 {
+  margin: 0;
+  font-size: 20px;
+}
+
+p {
+  margin: 10px 0 8px;
+  opacity: 0.9;
+}
+
+.timer {
+  opacity: 0.8;
+  font-size: 13px;
+  margin-bottom: 16px;
+}
+
+.actions {
+  display: flex;
+  gap: 10px;
+}
+
+.btn {
+  flex: 1;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.06);
+  color: #e9f2ff;
+  padding: 10px 12px;
+  cursor: pointer;
+}
+
+.btn.primary {
+  border-color: rgba(124, 247, 255, 0.35);
+  background: rgba(124, 247, 255, 0.14);
+  color: #0b1023;
+  font-weight: 800;
+}

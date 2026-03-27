@@ -1,0 +1,553 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Connor Assistant</title>
+    <link rel="stylesheet" href="./styles/main.css" />
+    <link
+      rel="icon"
+      type="image/svg+xml"
+      href="data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A//www.w3.org/2000/svg%27%20viewBox%3D%270%200%20128%20128%27%3E%3Cdefs%3E%3CradialGradient%20id%3D%27g%27%20cx%3D%2750%25%27%20cy%3D%2750%25%27%20r%3D%2755%25%27%3E%3Cstop%20offset%3D%270%25%27%20stop-color%3D%27%237cf7ff%27%20stop-opacity%3D%271%27/%3E%3Cstop%20offset%3D%27100%25%27%20stop-color%3D%27%23b46eff%27%20stop-opacity%3D%271%27/%3E%3C/radialGradient%3E%3C/defs%3E%3Ccircle%20cx%3D%2764%27%20cy%3D%2764%27%20r%3D%2745%27%20fill%3D%27none%27%20stroke%3D%27url(%23g)%27%20stroke-width%3D%2710%27%20stroke-linecap%3D%27round%27%20opacity%3D%270.95%27/%3E%3Ccircle%20cx%3D%2764%27%20cy%3D%2764%27%20r%3D%2714%27%20fill%3D%27%23000000%27%20opacity%3D%270.35%27/%3E%3C/svg%3E"
+    />
+  </head>
+  <body>
+    <div id="cyber-noise" aria-hidden="true"></div>
+    <div id="bg-grid" aria-hidden="true"></div>
+    <div id="bg-glow" aria-hidden="true"></div>
+    <div id="particlesContainer" aria-hidden="true"></div>
+    <div id="androidBootAnimation" class="boot-animation hidden" aria-hidden="true">
+      <div class="boot-circle"></div>
+      <div class="boot-text">RK800 SYSTEM BOOT</div>
+      <div class="boot-progress">
+        <div class="boot-progress-fill" id="bootProgressFill"></div>
+      </div>
+      <div class="boot-percent" id="bootPercent">0%</div>
+    </div>
+
+    <div id="app-shell">
+      <header class="topbar">
+        <div class="brand">
+          <div class="brand-title">
+            <div class="led-ring-wrap" aria-hidden="true">
+              <div class="led-ring"></div>
+              <img
+                class="brand-logo"
+                src="../assets/logo_connor.png"
+                alt=""
+                onerror="this.style.display='none'"
+              />
+              <div class="brand-led-text" id="brandLedText">C</div>
+            </div>
+            <div class="brand-title-text holographic-text">CONNOR</div>
+            <span class="brand-subtitle" id="chip-version">v—</span>
+          </div>
+          <div class="brand-tagline">Неоновый помощник с системным мониторингом</div>
+          <div class="system-online holographic-text">
+            <span class="online-dot" aria-hidden="true"></span>
+            <span>SYSTEM STATUS: ONLINE</span>
+          </div>
+        </div>
+
+        <div class="topbar-right">
+          <div class="kbd-hint">
+            <span class="kbd">Ctrl</span>
+            <span class="kbd">Shift</span>
+            <span class="kbd">T</span>
+          </div>
+
+          <div class="tabs">
+            <button class="tab-btn" id="tabMain" type="button">Главная</button>
+            <button class="tab-btn" id="tabDeepseek" type="button">DeepSeek Chat</button>
+            <button class="tab-btn" id="tabMusic" type="button">Музыка</button>
+            <button class="tab-btn" id="tabSettings" type="button">Настройки</button>
+          </div>
+        </div>
+      </header>
+
+      <main id="mainView" class="view">
+        <section class="card status-card">
+          <div class="status-row">
+            <div class="status-left">
+              <div class="section-title">Статус</div>
+              <div class="status-text" id="statusText">Запуск…</div>
+            </div>
+            <div class="status-right">
+              <div class="pulse-indicator" id="statusPulse" data-state="idle" aria-label="Состояние"></div>
+            </div>
+          </div>
+        </section>
+
+        <section class="card reminders-card">
+          <div class="section-title">Напоминания</div>
+          <div class="reminders-list" id="remindersList"></div>
+        </section>
+
+        <section class="card voice-card">
+          <div class="section-title">Голосовой интерфейс</div>
+          <div class="voice-wrap">
+            <div class="voice-visual" id="voiceViz" data-state="off" aria-label="Визуализация прослушивания">
+              <div class="voice-center"></div>
+              <div class="voice-ring"></div>
+              <div class="voice-amp" aria-hidden="true">
+                <span class="voice-amp-bar" style="--i:0"></span>
+                <span class="voice-amp-bar" style="--i:1"></span>
+                <span class="voice-amp-bar" style="--i:2"></span>
+                <span class="voice-amp-bar" style="--i:3"></span>
+                <span class="voice-amp-bar" style="--i:4"></span>
+                <span class="voice-amp-bar" style="--i:5"></span>
+                <span class="voice-amp-bar" style="--i:6"></span>
+                <span class="voice-amp-bar" style="--i:7"></span>
+                <span class="voice-amp-bar" style="--i:8"></span>
+                <span class="voice-amp-bar" style="--i:9"></span>
+                <span class="voice-amp-bar" style="--i:10"></span>
+                <span class="voice-amp-bar" style="--i:11"></span>
+              </div>
+              <div class="voice-dots">
+                <span class="voice-dot" style="--i: 0"></span>
+                <span class="voice-dot" style="--i: 1"></span>
+                <span class="voice-dot" style="--i: 2"></span>
+                <span class="voice-dot" style="--i: 3"></span>
+                <span class="voice-dot" style="--i: 4"></span>
+                <span class="voice-dot" style="--i: 5"></span>
+                <span class="voice-dot" style="--i: 6"></span>
+                <span class="voice-dot" style="--i: 7"></span>
+              </div>
+            </div>
+            <div class="voice-meta">
+              <div class="voice-state-icon" id="voiceStateIcon" data-state="pause" aria-hidden="true">
+                <svg class="voice-icon voice-icon-on" viewBox="0 0 24 24" width="24" height="24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" stroke="rgba(124,247,255,0.95)" stroke-width="2"/>
+                  <path d="M5 11a7 7 0 0 0 14 0" stroke="rgba(124,247,255,0.95)" stroke-width="2" stroke-linecap="round"/>
+                  <path d="M12 18v4" stroke="rgba(124,247,255,0.95)" stroke-width="2" stroke-linecap="round"/>
+                </svg>
+                <svg class="voice-icon voice-icon-pause" viewBox="0 0 24 24" width="24" height="24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M7 5h3v14H7V5Z" fill="rgba(233,251,255,0.85)"/>
+                  <path d="M14 5h3v14h-3V5Z" fill="rgba(233,251,255,0.85)"/>
+                </svg>
+                <svg class="voice-icon voice-icon-loading" viewBox="0 0 24 24" width="24" height="24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <circle cx="12" cy="12" r="9" stroke="rgba(124,247,255,0.55)" stroke-width="3" />
+                  <path d="M21 12a9 9 0 0 0-9-9" stroke="rgba(124,247,255,0.95)" stroke-width="3" stroke-linecap="round"/>
+                </svg>
+              </div>
+              <div class="voice-hint" id="voiceHint">Прослушивание: выкл</div>
+              <div class="voice-subhint">Имитация: визуал отвечает на “Слушать/Пауза”.</div>
+            </div>
+          </div>
+          <div class="voice-actions">
+            <button class="neon-btn" id="btnToggleListening" type="button">
+              <span class="btn-title">Слушать</span>
+              <span class="btn-sub">Пауза/вкл.</span>
+            </button>
+          </div>
+        </section>
+
+        <section class="card system-card">
+          <div class="section-title">Системная информация</div>
+          <div class="system-grid">
+            <div class="metric">
+              <div class="metric-label">CPU</div>
+              <div class="metric-value" id="cpuValue">—</div>
+              <div class="metric-sub" id="cpuSub">Загрузка</div>
+              <div class="metric-bar" aria-hidden="true">
+                <div class="metric-bar-fill" id="cpuBarFill"></div>
+              </div>
+            </div>
+
+            <div class="metric">
+              <div class="metric-label">RAM</div>
+              <div class="metric-value" id="ramValue">—</div>
+              <div class="metric-sub" id="ramSub">Использовано</div>
+              <div class="metric-bar" aria-hidden="true">
+                <div class="metric-bar-fill" id="ramBarFill"></div>
+              </div>
+            </div>
+
+            <div class="metric">
+              <div class="metric-label">Диск</div>
+              <div class="metric-value" id="diskValue">—</div>
+              <div class="metric-sub" id="diskSub">Свободно</div>
+              <div class="metric-bar" aria-hidden="true">
+                <div class="metric-bar-fill" id="diskBarFill"></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="system-actions">
+            <button class="neon-btn" id="btnOpenCasino" type="button">
+              🎰 Казино
+            </button>
+            <button class="neon-btn danger" id="btnQuitApp" type="button">
+              Выход
+            </button>
+          </div>
+
+          <div class="active-window" id="activeWindowBlock">
+            <div class="metric-label">Активное окно</div>
+            <div class="active-title" id="activeWindowTitle">—</div>
+            <div class="active-owner" id="activeWindowOwner">—</div>
+          </div>
+
+          <div class="system-footer">
+            <div class="metric-sub" id="systemUpdatedAt">Обновление: —</div>
+          </div>
+
+        </section>
+      </main>
+
+      <main id="musicView" class="view hidden">
+        <section class="card music-card">
+          <div class="section-title">Музыка</div>
+          <div class="music-player">
+            <div class="player-controls">
+              <button id="prevBtn" type="button" class="music-btn">⏮</button>
+              <button id="playPauseBtn" type="button" class="music-btn">▶</button>
+              <button id="nextBtn" type="button" class="music-btn">⏭</button>
+              <div class="volume">
+                <input type="range" id="volumeSlider" min="0" max="100" value="70" />
+              </div>
+            </div>
+
+            <div class="player-progress">
+              <span id="currentTime">0:00</span>
+              <input type="range" id="progressBar" min="0" max="100" value="0" />
+              <span id="totalTime">0:00</span>
+            </div>
+
+            <div class="music-scanbar">
+              <button id="scanMusicBtn" type="button" class="music-add">📁 Сканировать</button>
+              <span id="musicTracksCount" style="opacity: 0.75;">—</span>
+            </div>
+
+            <div class="playlist">
+              <div class="playlist-header">
+                <span>ПЛЕЙЛИСТ</span>
+                <select id="playlistSelect" class="playlist-select"></select>
+                <button id="newPlaylistBtn" type="button" class="music-add">+</button>
+                <button id="deletePlaylistBtn" type="button" class="music-add">🗑</button>
+              </div>
+              <div class="tracks-header">
+                <span>ТРЕКИ</span>
+                <button id="addTrackBtn" type="button" class="music-add">➕</button>
+              </div>
+              <div id="trackList"></div>
+            </div>
+          </div>
+        </section>
+      </main>
+
+      <main id="deepseekView" class="view hidden">
+        <section class="card deepseek-card">
+          <div class="deepseek-toolbar">
+            <div class="deepseek-left">
+              <div class="deepseek-label">Диалог</div>
+              <select id="deepseekChatSelect" class="deepseek-select"></select>
+            </div>
+            <div class="deepseek-right">
+              <button class="neon-btn secondary" id="btnDeepNewChat">
+                <span class="btn-title">Новый чат</span>
+                <span class="btn-sub">Начать диалог</span>
+              </button>
+              <button class="neon-btn danger" id="btnDeepDeleteChat" type="button">
+                <span class="btn-title">Удалить</span>
+                <span class="btn-sub">Текущий чат</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="deepseek-messages" id="deepseekMessages"></div>
+
+          <div class="deepseek-composer">
+            <textarea id="deepseekInput" spellcheck="false" placeholder="Введите вопрос…" rows="3"></textarea>
+            <button class="neon-btn" id="btnDeepSend">
+              <span class="btn-title">Спросить</span>
+              <span class="btn-sub">DeepSeek</span>
+            </button>
+          </div>
+
+          <div class="deepseek-tts">
+            <label class="toggle-row" style="margin-top: 0; padding: 0; border: none; background: transparent;">
+              <input type="checkbox" id="deepseekAutoSpeak" checked />
+              <span class="toggle-ui" aria-hidden="true"></span>
+              <span class="toggle-text">Озвучивать ответ</span>
+            </label>
+            <button class="neon-btn secondary" id="btnDeepSpeak">
+              <span class="btn-title">Озвучить</span>
+              <span class="btn-sub">Последний ответ</span>
+            </button>
+            <button class="neon-btn danger" id="btnDeepStopSpeak">
+              <span class="btn-title">Стоп</span>
+              <span class="btn-sub">TTS</span>
+            </button>
+          </div>
+
+          <div class="deepseek-status" id="deepseekStatus"></div>
+        </section>
+      </main>
+
+      <main id="settingsView" class="view hidden">
+        <section class="card settings-card">
+          <div class="section-title">Настройки</div>
+
+          <label class="toggle-row">
+            <input type="checkbox" id="toggleAutoLaunch" />
+            <span class="toggle-ui" aria-hidden="true"></span>
+            <span class="toggle-text">Автозапуск</span>
+          </label>
+
+          <label class="toggle-row">
+            <input type="checkbox" id="toggleNeonTheme" />
+            <span class="toggle-ui" aria-hidden="true"></span>
+            <span class="toggle-text">Неоновая тема</span>
+          </label>
+
+          <label class="toggle-row">
+            <input type="checkbox" id="toggleHotkey" />
+            <span class="toggle-ui" aria-hidden="true"></span>
+            <span class="toggle-text">
+              Горячие клавиши
+            </span>
+          </label>
+
+          <label class="toggle-row">
+            <input type="checkbox" id="toggleNoConfirmPower" />
+            <span class="toggle-ui" aria-hidden="true"></span>
+            <span class="toggle-text">Выключать без подтверждения</span>
+          </label>
+
+          <div class="hotkeys-card" style="margin-top: 14px;">
+            <div class="hotkeys-title">Подтверждение действий</div>
+            <label class="toggle-row" style="margin-top: 10px;">
+              <input type="checkbox" id="skipConfirm" />
+              <span class="toggle-ui" aria-hidden="true"></span>
+              <span class="toggle-text">Выключать/перезагружать без подтверждения</span>
+            </label>
+          </div>
+
+          <div class="hotkeys-card" style="margin-top: 14px;">
+            <div class="hotkeys-title">Микрофон</div>
+            <div class="settings-actions" style="margin-top: 12px;">
+              <button class="neon-btn secondary hidden" id="btnRequestMicPermission" type="button">
+                <span class="btn-title">Запросить разрешение</span>
+                <span class="btn-sub">Микрофон</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="hotkeys-card" style="margin-top: 14px;">
+            <div class="hotkeys-title">Голос Коннора</div>
+            <label class="toggle-row" style="margin-top: 10px;">
+              <input type="checkbox" id="ttsEnabled" checked />
+              <span class="toggle-ui" aria-hidden="true"></span>
+              <span class="toggle-text">Озвучивать ответы</span>
+            </label>
+            <label class="hotkey-row" style="margin-top: 10px;">
+              <span class="hotkey-label">Скорость</span>
+              <input id="ttsRate" type="range" min="0.5" max="2.0" step="0.1" value="1.0" />
+            </label>
+            <label class="hotkey-row" style="margin-top: 10px;">
+              <span class="hotkey-label">Громкость</span>
+              <input id="ttsVolume" type="range" min="0" max="1" step="0.1" value="0.8" />
+            </label>
+          </div>
+
+          <div class="hotkeys-card" style="margin-top: 14px;">
+            <div class="hotkeys-title">Язык / Language</div>
+            <select id="appLanguage" class="hotkey-input mono" style="margin-top: 10px;">
+              <option value="ru">Русский</option>
+              <option value="en">English</option>
+            </select>
+          </div>
+
+          <div class="hotkeys-card" style="margin-top: 14px;">
+            <div class="hotkeys-title">🔄 Обновления</div>
+            <label class="toggle-row" style="margin-top: 10px;">
+              <input type="checkbox" id="autoUpdateEnabled" />
+              <span class="toggle-ui" aria-hidden="true"></span>
+              <span class="toggle-text">Автоматически проверять обновления при запуске</span>
+            </label>
+            <div class="settings-actions" style="margin-top: 12px;">
+              <button class="neon-btn secondary" id="btnCheckUpdates">
+                <span class="btn-title">Проверить обновления</span>
+                <span class="btn-sub">Поиск новой версии</span>
+              </button>
+            </div>
+            <div id="updateStatus" class="settings-note-text" style="margin-top: 12px; color: var(--accent);">
+              ⚡ Статус: готов к проверке
+            </div>
+            <div id="updateProgress" style="display:none; margin-top: 12px;">
+              <div class="metric-bar">
+                <div id="updateProgressFill" class="metric-bar-fill" style="width:0%"></div>
+              </div>
+              <div id="updateProgressText" class="settings-note-text" style="margin-top: 4px;">Загрузка: 0%</div>
+            </div>
+          </div>
+
+          <div class="hotkeys-card">
+            <div class="hotkeys-title">Настройка горячих клавиш</div>
+
+            <div class="hotkeys-grid">
+              <label class="hotkey-row">
+                <span class="hotkey-label">Показать/скрыть окно</span>
+                <input class="hotkey-input mono" id="hk-toggleWindow" type="text" readonly />
+              </label>
+
+              <label class="hotkey-row">
+                <span class="hotkey-label">Звук: вкл/выкл</span>
+                <input class="hotkey-input mono" id="hk-toggleMuteSound" type="text" readonly />
+              </label>
+
+              <label class="hotkey-row">
+                <span class="hotkey-label">Открыть браузер</span>
+                <input class="hotkey-input mono" id="hk-openBrowser" type="text" readonly />
+              </label>
+
+              <label class="hotkey-row">
+                <span class="hotkey-label">Распознавание голоса</span>
+                <input class="hotkey-input mono" id="hk-voiceStart" type="text" readonly />
+              </label>
+
+              <label class="hotkey-row">
+                <span class="hotkey-label">Выход</span>
+                <input class="hotkey-input mono" id="hk-exit" type="text" readonly />
+              </label>
+            </div>
+          </div>
+
+          <div class="hotkeys-card" style="margin-top: 14px;">
+            <div class="hotkeys-title">DeepSeek API</div>
+
+            <div class="hotkeys-grid">
+              <label class="hotkey-row">
+                <span class="hotkey-label">API ключ</span>
+                <input id="deepseekApiKeyInput" class="hotkey-input mono" type="password" placeholder="Bearer token" />
+              </label>
+            </div>
+
+            <div class="settings-actions" style="margin-top: 12px;">
+              <button class="neon-btn secondary" id="btnSaveDeepseekApiKey">
+                <span class="btn-title">Сохранить</span>
+                <span class="btn-sub">Ключ для API</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="hotkeys-card" style="margin-top: 14px;">
+            <div class="hotkeys-title">Профиль и кэш</div>
+
+            <div class="hotkeys-grid">
+              <label class="hotkey-row">
+                <span class="hotkey-label">Ваше имя</span>
+                <input id="userNameInput" class="hotkey-input mono" type="text" placeholder="Введите имя" />
+              </label>
+            </div>
+
+            <div class="settings-actions" style="margin-top: 12px;">
+              <button class="neon-btn secondary" id="btnSaveUserName">
+                <span class="btn-title">Сохранить имя</span>
+                <span class="btn-sub">Для голосовой команды</span>
+              </button>
+            </div>
+
+            <div class="actions" style="margin-top: 10px;">
+              <button class="neon-btn secondary" id="btnRescanCache">
+                <span class="btn-title">Пересканировать</span>
+                <span class="btn-sub">Папки и кэш</span>
+              </button>
+              <button class="neon-btn secondary" id="btnClearCache">
+                <span class="btn-title">Очистить кэш</span>
+                <span class="btn-sub">connor-cache.json</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="settings-note">
+            <div class="settings-note-title">Подсказка</div>
+            <div class="settings-note-text">Система обновляет CPU/RAM/диск/активное окно каждые 2 секунды.</div>
+          </div>
+
+          <div class="settings-actions">
+            <button class="neon-btn" id="btnBackFromSettings">
+              <span class="btn-title">Назад</span>
+              <span class="btn-sub">К главному окну</span>
+            </button>
+          </div>
+
+          <div class="settings-actions" style="margin-top: 10px;">
+            <button class="neon-btn secondary" id="btnApplyHotkeys">
+              <span class="btn-title">Применить</span>
+              <span class="btn-sub">Сохранить горячие клавиши</span>
+            </button>
+          </div>
+
+          <div class="hotkeys-card" id="macroPanel" style="margin-top: 14px;">
+            <div class="hotkeys-title">Макросы</div>
+
+            <div class="hotkeys-grid">
+              <label class="hotkey-row">
+                <span class="hotkey-label">Выбор макроса</span>
+                <select id="macroList" style="width: 220px; padding: 10px 12px; border-radius: 10px; background: rgba(0,0,0,0.2); border: 1px solid rgba(255,255,255,0.14); color: rgba(233,251,255,0.92); outline: none;"></select>
+              </label>
+
+              <label class="hotkey-row">
+                <span class="hotkey-label">Имя макроса</span>
+                <input id="macroName" class="hotkey-input mono" type="text" />
+              </label>
+            </div>
+
+            <div class="actions" style="margin-top: 12px;">
+              <button class="neon-btn" id="btnMacroRecord">
+                <span class="btn-title">Запись</span>
+                <span class="btn-sub">Начать макрос</span>
+              </button>
+              <button class="neon-btn secondary" id="btnMacroStop">
+                <span class="btn-title">Стоп</span>
+                <span class="btn-sub">Остановить</span>
+              </button>
+            </div>
+
+            <div class="actions" style="margin-top: 10px;">
+              <button class="neon-btn secondary" id="btnMacroPlay">
+                <span class="btn-title">Играть</span>
+                <span class="btn-sub">Выполнить</span>
+              </button>
+              <button class="neon-btn secondary" id="btnMacroSave">
+                <span class="btn-title">Сохранить</span>
+                <span class="btn-sub">Обновить шаги</span>
+              </button>
+            </div>
+
+            <div class="hotkeys-grid" style="margin-top: 12px;">
+              <label class="hotkey-row">
+                <span class="hotkey-label">Повторы</span>
+                <input id="macroRepeatTimes" class="hotkey-input mono" type="number" min="1" step="1" value="1" />
+              </label>
+
+              <label class="hotkey-row">
+                <span class="hotkey-label">Цикл</span>
+                <label class="toggle-row" style="padding: 0; border: none; background: transparent;">
+                  <input type="checkbox" id="macroLoop" />
+                  <span class="toggle-ui" aria-hidden="true"></span>
+                </label>
+              </label>
+            </div>
+
+            <div style="margin-top: 12px;">
+              <div class="hotkey-label" style="margin-bottom: 8px;">Шаги (JSON)</div>
+              <textarea
+                id="macroSteps"
+                spellcheck="false"
+                style="width: 100%; height: 160px; resize: vertical; background: rgba(0,0,0,0.2); border: 1px solid rgba(255,255,255,0.14); border-radius: 10px; padding: 12px; color: rgba(233,251,255,0.92); outline: none; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace; font-size: 12px; line-height: 1.35;"
+              ></textarea>
+            </div>
+
+            <div class="status" id="macroStatus" style="margin-top: 10px; opacity: 0.9;"></div>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <script type="module" src="./scripts/renderer.js"></script>
+  </body>
+</html>
+

@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Подтверждение</title>
+    <style>
+      body {
+        background: rgba(10, 10, 26, 0.95);
+        backdrop-filter: blur(20px);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        height: 100vh;
+        margin: 0;
+        font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      }
+      .confirm-card {
+        background: rgba(20, 20, 40, 0.9);
+        border: 1px solid rgba(45, 212, 191, 0.4);
+        border-radius: 28px;
+        padding: 28px 32px;
+        width: 300px;
+        text-align: center;
+      }
+      .message { color: #e2e8f0; margin-bottom: 24px; font-size: 16px; }
+      .buttons { display: flex; gap: 12px; justify-content: center; }
+      button {
+        padding: 8px 24px;
+        border-radius: 40px;
+        border: none;
+        cursor: pointer;
+        font-weight: 600;
+      }
+      .confirm { background: #2dd4bf; color: #0a0a1a; }
+      .cancel { background: rgba(255, 255, 255, 0.1); color: #e2e8f0; }
+    </style>
+  </head>
+  <body>
+    <div class="confirm-card">
+      <div class="message" id="message">Подтвердите действие</div>
+      <div class="buttons">
+        <button class="confirm" id="confirm" type="button">Да</button>
+        <button class="cancel" id="cancel" type="button">Нет</button>
+      </div>
+    </div>
+    <script>
+      const api = window.api || null;
+      document.getElementById('confirm').onclick = () => {
+        const key = new URLSearchParams(location.search).get('actionKey') || '';
+        api?.systemConfirmAction?.(key);
+      };
+      document.getElementById('cancel').onclick = () => {
+        api?.systemCancelPending?.();
+      };
+      if (api?.onSystemConfirmState) {
+        api.onSystemConfirmState((data) => {
+          document.getElementById('message').textContent = data?.message || 'Подтвердите действие';
+        });
+      }
+    </script>
+  </body>
+  </html>

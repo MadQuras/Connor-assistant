@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Casino</title>
+    <link rel="stylesheet" href="./casino.css" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/howler/2.2.4/howler.min.js"></script>
+  </head>
+  <body>
+    <div class="casino-root">
+      <header class="casino-header">
+        <div>
+          <div class="casino-title">CONNOR CASINO</div>
+          <div class="casino-subtitle">Рулетка • локальные выплаты • история</div>
+        </div>
+        <div class="wallet">
+          <div class="wallet-label">Баланс</div>
+          <div class="wallet-value" id="walletValue">—</div>
+        </div>
+      </header>
+
+      <div class="casino-grid">
+        <section class="casino-left">
+          <div class="wheel-wrap">
+            <canvas id="wheelCanvas" width="720" height="720"></canvas>
+          </div>
+          <div class="result-strip" id="resultStrip">
+            <div class="result-title">Последний результат</div>
+            <div class="result-value" id="lastResult">—</div>
+            <div class="result-meta" id="lastMeta"></div>
+          </div>
+        </section>
+
+        <section class="casino-right">
+          <div class="panel">
+            <div class="panel-title">Ставка</div>
+
+            <div class="bet-row">
+              <label class="radio">
+                <input type="radio" name="betType" value="red" checked />
+                <span>Красное</span>
+              </label>
+              <label class="radio">
+                <input type="radio" name="betType" value="black" />
+                <span>Чёрное</span>
+              </label>
+              <label class="radio">
+                <input type="radio" name="betType" value="even" />
+                <span>Чётное</span>
+              </label>
+              <label class="radio">
+                <input type="radio" name="betType" value="odd" />
+                <span>Нечётное</span>
+              </label>
+              <label class="radio">
+                <input type="radio" name="betType" value="number" />
+                <span>Число</span>
+              </label>
+            </div>
+
+            <div class="bet-row bet-row-number">
+              <label class="field">
+                <span class="field-label">Номер (0-36)</span>
+                <input id="betNumber" type="number" min="0" max="36" value="7" />
+              </label>
+            </div>
+
+            <div class="bet-row">
+              <label class="field">
+                <span class="field-label">Сумма ставки</span>
+                <input id="betStake" type="number" min="1" step="1" value="50" />
+              </label>
+            </div>
+
+            <div class="actions">
+              <button class="neon-btn" id="btnSpin">Крутить</button>
+              <button class="neon-btn secondary" id="btnReset">Сброс</button>
+            </div>
+
+            <div class="status" id="statusText">Загрузка…</div>
+          </div>
+
+          <div class="panel panel-history">
+            <div class="panel-title">История</div>
+            <div class="history" id="historyList"></div>
+          </div>
+        </section>
+      </div>
+    </div>
+
+    <script src="./casino.js" defer></script>
+  </body>
+</html>
+

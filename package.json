@@ -1,0 +1,83 @@
+{
+  "name": "connor-assistant",
+  "version": "2.0.1",
+  "description": "Connor Assistant — голосовой ассистент для Windows с офлайн-распознаванием",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder",
+    "publish": "electron-builder --publish always",
+    "release": "electron-builder --publish always --win",
+    "pack": "electron-builder --dir",
+    "dist": "electron-builder"
+  },
+  "author": "MadQuras",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MadQuras/connor-assistant.git"
+  },
+  "build": {
+    "appId": "com.connor.assistant",
+    "productName": "Connor Assistant",
+    "copyright": "Copyright © 2026 MadQuras",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "**/*",
+      "!node_modules/.cache",
+      "!models/**",
+      "!logs/**",
+      "!userData/**",
+      "!*.log",
+      "!*.map"
+    ],
+    "extraResources": [
+      {
+        "from": "models/vosk-ru",
+        "to": "models/vosk-ru",
+        "filter": ["**/*"]
+      }
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "assets/icon.png",
+      "artifactName": "Connor_Assistant_Setup_${version}.exe"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": true,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "deleteAppDataOnUninstall": false,
+      "runAfterFinish": true
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "MadQuras",
+      "repo": "connor-assistant",
+      "private": false,
+      "releaseType": "release"
+    }
+  },
+  "dependencies": {
+    "active-win": "^8.2.1",
+    "electron-log": "^5.0.1",
+    "electron-store": "^11.0.2",
+    "electron-updater": "^6.1.7",
+    "howler": "^2.2.4",
+    "node-microphone": "^0.1.6",
+    "node-schedule": "^2.1.1",
+    "robotjs": "^0.6.0",
+    "screenshot-desktop": "^1.15.0",
+    "systeminformation": "^5.21.8",
+    "tesseract.js": "^7.0.0",
+    "vosk": "^0.3.39"
+  },
+  "devDependencies": {
+    "electron": "^27.0.0",
+    "electron-builder": "^24.6.4"
+  }
+}

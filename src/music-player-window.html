@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Music Player</title>
+    <link rel="stylesheet" href="./styles/music-player.css" />
+    <script src="../node_modules/howler/dist/howler.min.js"></script>
+  </head>
+  <body>
+    <div class="root">
+      <header class="top">
+        <input id="searchInput" type="text" placeholder="Поиск по трекам..." />
+        <button id="btnScan">Сканировать</button>
+        <button id="btnAdd">Добавить файл</button>
+      </header>
+      <div class="grid">
+        <section class="left">
+          <div class="cover">♫</div>
+          <div id="nowTitle" class="now">—</div>
+          <input id="progress" type="range" min="0" max="100" value="0" />
+          <div class="controls">
+            <button id="btnPrev">⏮</button>
+            <button id="btnPlay">▶</button>
+            <button id="btnNext">⏭</button>
+          </div>
+        </section>
+        <section class="right">
+          <div class="row">
+            <select id="playlistSelect"></select>
+            <button id="btnNewPlaylist">+</button>
+            <button id="btnDeletePlaylist">−</button>
+          </div>
+          <div id="trackList" class="list"></div>
+        </section>
+      </div>
+      <footer>
+        <div class="title">Очередь</div>
+        <div id="queueList" class="queue"></div>
+      </footer>
+    </div>
+    <script src="./music-player-full.js" defer></script>
+  </body>
+  </html>

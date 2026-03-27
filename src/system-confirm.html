@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Подтверждение</title>
+    <link rel="stylesheet" href="./styles/system-confirm.css" />
+  </head>
+  <body>
+    <main class="root">
+      <h1 id="title">Подтверждение</h1>
+      <p id="text">Выполнить системную команду?</p>
+      <div class="timer">Осталось: <span id="timeLeft">10</span> c</div>
+      <div class="actions">
+        <button id="btnConfirm" class="btn primary" type="button">Подтвердить</button>
+        <button id="btnCancel" class="btn" type="button">Отмена</button>
+      </div>
+    </main>
+
+    <script>
+      const el = {
+        title: document.getElementById('title'),
+        text: document.getElementById('text'),
+        timeLeft: document.getElementById('timeLeft'),
+        btnConfirm: document.getElementById('btnConfirm'),
+        btnCancel: document.getElementById('btnCancel'),
+      };
+      let currentActionKey = null;
+
+      window.api?.onSystemConfirmState?.((data) => {
+        try {
+          currentActionKey = data?.actionKey || null;
+          if (el.text) el.text.textContent = data?.label ? `${data.label}?` : 'Выполнить системную команду?';
+          if (el.timeLeft) el.timeLeft.textContent = String(Number(data?.remainingSec || 0));
+        } catch {}
+      });
+
+      el.btnConfirm?.addEventListener('click', async () => {
+        if (!currentActionKey) return;
+        await window.api?.systemConfirmAction?.(currentActionKey);
+      });
+
+      el.btnCancel?.addEventListener('click', async () => {
+        await window.api?.systemCancelPending?.();
+      });
+    </script>
+  </body>
+  </html>

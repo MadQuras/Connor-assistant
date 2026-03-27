@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Planner</title>
+    <link rel="stylesheet" href="./styles/planner.css" />
+  </head>
+  <body>
+    <div class="root">
+      <header class="head">
+        <button class="tab active" data-tab="reminders">Напоминания</button>
+        <button class="tab" data-tab="timers">Таймер</button>
+        <button class="tab" data-tab="alarms">Будильник</button>
+      </header>
+
+      <main class="content">
+        <section id="tab-reminders" class="pane">
+          <div class="title">Сегодня</div>
+          <div id="remindersList" class="list"></div>
+        </section>
+
+        <section id="tab-timers" class="pane hidden">
+          <div class="title">Активные таймеры</div>
+          <div class="row">
+            <input id="timerMinutes" type="number" min="1" value="5" />
+            <button id="btnAddTimer">Старт</button>
+            <button id="btnStopTimer">Стоп</button>
+            <button id="btnClearTimers">Сброс всех</button>
+          </div>
+          <div id="timersList" class="list"></div>
+        </section>
+
+        <section id="tab-alarms" class="pane hidden">
+          <div class="title">Будильник</div>
+          <div class="row">
+            <input id="alarmTime" type="time" />
+            <button id="btnAddAlarm">Добавить</button>
+          </div>
+          <div id="alarmsList" class="list"></div>
+        </section>
+      </main>
+    </div>
+
+    <script src="./planner.js" defer></script>
+  </body>
+  </html>
