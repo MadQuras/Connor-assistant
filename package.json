@@ -1,6 +1,6 @@
 {
   "name": "connor-assistant",
-  "version": "2.0.3",
+  "version": "2.1.0",
   "description": "Connor Assistant — голосовой ассистент для Windows с офлайн-распознаванием",
   "main": "main.js",
   "scripts": {
@@ -40,12 +40,16 @@
       {
         "from": "models/vosk-ru",
         "to": "models/vosk-ru",
-        "filter": ["**/*"]
+        "filter": [
+          "**/*"
+        ]
       },
       {
         "from": "models/vosk-en",
         "to": "models/vosk-en",
-        "filter": ["**/*"]
+        "filter": [
+          "**/*"
+        ]
       },
       {
         "from": "vosk_stream.py",
