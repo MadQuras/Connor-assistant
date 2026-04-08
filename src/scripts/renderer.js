@@ -107,9 +107,12 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Tabs.
     tabMain: document.getElementById('tabMain'),
-    tabDeepseek: document.getElementById('tabDeepseek'),
-    tabMusic: document.getElementById('tabMusic'),
     tabSettings: document.getElementById('tabSettings'),
+    settingsNotesFolder: document.getElementById('settingsNotesFolder'),
+    btnSelectNotesFolder: document.getElementById('btnSelectNotesFolder'),
+    btnSaveNotesFolder: document.getElementById('btnSaveNotesFolder'),
+    btnScanPC: document.getElementById('btnScanPC'),
+    scanStatus: document.getElementById('scanStatus'),
 
     // DeepSeek UI.
     deepseekChatSelect: document.getElementById('deepseekChatSelect'),
@@ -130,6 +133,18 @@ document.addEventListener('DOMContentLoaded', async () => {
     btnSaveUserName: document.getElementById('btnSaveUserName'),
     btnClearCache: document.getElementById('btnClearCache'),
     btnRescanCache: document.getElementById('btnRescanCache'),
+
+    notesView: document.getElementById('notesView'),
+    notesFolder: document.getElementById('notesFolder'),
+    selectNotesFolder: document.getElementById('selectNotesFolder'),
+    recordingStatus: document.getElementById('recordingStatus'),
+    recordingStatusText: document.getElementById('recordingStatusText'),
+    startNotesBtn: document.getElementById('startNotesBtn'),
+    stopNotesBtn: document.getElementById('stopNotesBtn'),
+    cancelNotesBtn: document.getElementById('cancelNotesBtn'),
+    notesPreview: document.getElementById('notesPreview'),
+    notesPreviewContent: document.getElementById('notesPreviewContent'),
+    savedNotesList: document.getElementById('savedNotesList'),
   };
 
   const cpuValue = document.getElementById('cpuValue');
@@ -235,6 +250,11 @@ document.addEventListener('DOMContentLoaded', async () => {
   let settings = await window.api.getSettings().catch(() => null);
   if (!settings) settings = { autoLaunch: false, theme: 'neon', hotkeyEnabled: true };
 
+  if (settings?.voiceNotesFolder) {
+    if (el.notesFolder) el.notesFolder.value = String(settings.voiceNotesFolder);
+    if (el.settingsNotesFolder) el.settingsNotesFolder.value = String(settings.voiceNotesFolder);
+  }
+
   applyTheme(settings.theme);
   if (el.toggleAutoLaunch) el.toggleAutoLaunch.checked = !!settings.autoLaunch;
   if (el.toggleNeonTheme) el.toggleNeonTheme.checked = settings.theme === 'neon';
@@ -335,8 +355,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Маршрутизация (настройки/главный экран).
   function setActiveTab(tabKey) {
     if (el.tabMain) el.tabMain.classList.toggle('active', tabKey === 'main');
-    if (el.tabDeepseek) el.tabDeepseek.classList.toggle('active', tabKey === 'chat');
-    if (el.tabMusic) el.tabMusic.classList.toggle('active', tabKey === 'music');
     if (el.tabSettings) el.tabSettings.classList.toggle('active', tabKey === 'settings');
   }
 
@@ -345,6 +363,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     setHidden(el.mainView, false);
     setHidden(el.musicView, true);
     setHidden(document.getElementById('deepseekView'), true);
+    setHidden(el.notesView, true);
     setActiveTab('main');
   }
 
@@ -353,6 +372,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     setHidden(el.settingsView, false);
     setHidden(el.musicView, true);
     setHidden(document.getElementById('deepseekView'), true);
+    setHidden(el.notesView, true);
     setActiveTab('settings');
   }
 
@@ -361,13 +381,25 @@ document.addEventListener('DOMContentLoaded', async () => {
     setHidden(el.settingsView, true);
     setHidden(el.musicView, false);
     setHidden(document.getElementById('deepseekView'), true);
+    setHidden(el.notesView, true);
     setActiveTab('music');
+  }
+
+  function showNotesView() {
+    setHidden(el.mainView, true);
+    setHidden(el.settingsView, true);
+    setHidden(el.musicView, true);
+    setHidden(document.getElementById('deepseekView'), true);
+    setHidden(el.notesView, false);
+    setActiveTab('notes');
+    void loadSavedNotes();
   }
 
   function showDeepSeekView() {
     setHidden(el.settingsView, true);
     setHidden(el.mainView, true);
     setHidden(el.musicView, true);
+    setHidden(el.notesView, true);
     setHidden(document.getElementById('deepseekView'), false);
     setActiveTab('chat');
   }
@@ -376,8 +408,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   el.btnOpenSettings?.addEventListener('click', () => showSettingsView());
 
   el.tabMain?.addEventListener('click', () => showMainView());
-  el.tabDeepseek?.addEventListener('click', () => showDeepSeekView());
-  el.tabMusic?.addEventListener('click', () => showMusicView());
   el.tabSettings?.addEventListener('click', () => showSettingsView());
 
   setActiveTab('main');
@@ -946,9 +976,340 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // Получаем команды от main (после wake word — или напрямую из fallback)
   if (window.api?.onVoiceCommand) {
-    window.api.onVoiceCommand(({ command }) => {
-      const lowerCmd = String(command || '').trim().toLowerCase();
+    window.api.onVoiceCommand(async ({ command }) => {
+      const openCommandCorrections = {
+        дискорд: 'дискорд',
+        дискорт: 'дискорд',
+        'дис корд': 'дискорд',
+        'дис корт': 'дискорд',
+        дизкорд: 'дискорд',
+        дизкорт: 'дискорд',
+        'диз корд': 'дискорд',
+        'д искорт': 'дискорд',
+        'д искорд': 'дискорд',
+        стим: 'стим',
+        тим: 'стим',
+        'с тим': 'стим',
+        итим: 'стим',
+        стимп: 'стим',
+        'стим п': 'стим',
+        дискорт: 'дискорд',
+        'дис корд': 'дискорд',
+        'майн крафт': 'майнкрафт',
+        майнкраф: 'майнкрафт',
+        'кей эс': 'кс',
+        каэс: 'кс',
+        дотка: 'дота',
+        'вар фейс': 'варфейс',
+        ексель: 'эксель',
+        ексел: 'эксель',
+        вот: 'ворд',
+        блакнот: 'блокнот',
+        провадник: 'проводник',
+      };
+      const correctOpenCommand = (text) => {
+        let corrected = String(text || '').toLowerCase();
+        for (const [wrong, correct] of Object.entries(openCommandCorrections)) {
+          const escaped = wrong.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+          const regexWord = new RegExp(`\\b${escaped}\\b`, 'gi');
+          corrected = corrected.replace(regexWord, correct);
+          const regexSpaced = new RegExp(escaped.replace(/ /g, '\\s+'), 'gi');
+          corrected = corrected.replace(regexSpaced, correct);
+        }
+        return corrected;
+      };
+
+      const rawCommand = String(command || '').trim().toLowerCase();
+      const lowerCmd = correctOpenCommand(rawCommand);
       const isEn = settings?.language === 'en';
+      const handleOpenCommand = async (target) => {
+        const targetLower = String(target || '').trim().toLowerCase();
+        if (!targetLower) return null;
+        const normalize = (s) => String(s || '').toLowerCase().replace(/ё/g, 'е').replace(/\s+/g, ' ').trim();
+        const transliterate = (text) => {
+          const ruToEn = {
+            а: 'a', б: 'b', в: 'v', г: 'g', д: 'd', е: 'e', ё: 'e',
+            ж: 'zh', з: 'z', и: 'i', й: 'y', к: 'k', л: 'l', м: 'm',
+            н: 'n', о: 'o', п: 'p', р: 'r', с: 's', т: 't', у: 'u',
+            ф: 'f', х: 'h', ц: 'ts', ч: 'ch', ш: 'sh', щ: 'shch',
+            ъ: '', ы: 'y', ь: '', э: 'e', ю: 'yu', я: 'ya',
+          };
+          return String(text || '')
+            .split('')
+            .map((ch) => ruToEn[ch] || ch)
+            .join('');
+        };
+        const nTarget = normalize(targetLower);
+        const nTargetTranslit = normalize(transliterate(nTarget));
+        const transliterateForSearch = (text) => {
+          const ruToEn = {
+            с: 's', т: 't', и: 'i', м: 'm', д: 'd', р: 'r', к: 'k', а: 'a', й: 'y', н: 'n', ф: 'f', э: 'e',
+            в: 'v', о: 'o', л: 'l', п: 'p', б: 'b', ч: 'ch', ш: 'sh', щ: 'shch', ц: 'ts', ы: 'y', ь: '', ъ: '', ё: 'e',
+          };
+          return String(text || '')
+            .toLowerCase()
+            .split('')
+            .map((ch) => ruToEn[ch] || ch)
+            .join('');
+        };
+        const levenshteinDistance = (a, b) => {
+          const aa = String(a || '');
+          const bb = String(b || '');
+          const matrix = Array.from({ length: bb.length + 1 }, (_, i) => [i]);
+          for (let j = 0; j <= aa.length; j++) matrix[0][j] = j;
+          for (let i = 1; i <= bb.length; i++) {
+            for (let j = 1; j <= aa.length; j++) {
+              const cost = aa[j - 1] === bb[i - 1] ? 0 : 1;
+              matrix[i][j] = Math.min(matrix[i - 1][j] + 1, matrix[i][j - 1] + 1, matrix[i - 1][j - 1] + cost);
+            }
+          }
+          return matrix[bb.length][aa.length];
+        };
+        const fuzzySearchTargets = (query, entries) => {
+          const q = normalize(query);
+          const qTranslit = normalize(transliterate(q));
+          const qRuToEn = normalize(transliterateForSearch(q));
+          return (Array.isArray(entries) ? entries : []).filter((entry) => {
+            const name = normalize(entry?.name || '');
+            const nameTranslit = normalize(transliterate(name));
+            const nameRuToEn = normalize(transliterateForSearch(name));
+            if (!name) return false;
+            if (name.includes(q) || q.includes(name)) return true;
+            if (name.includes(qTranslit) || qTranslit.includes(name)) return true;
+            if (nameTranslit.includes(q) || q.includes(nameTranslit)) return true;
+            if (nameTranslit.includes(qTranslit) || qTranslit.includes(nameTranslit)) return true;
+            if (name.startsWith(q) || name.startsWith(qTranslit)) return true;
+            if (name.includes(qRuToEn) || nameRuToEn.includes(q)) return true;
+            if (qRuToEn.length >= 3 && name.length >= 3) {
+              const left = name.slice(0, qRuToEn.length);
+              const d = levenshteinDistance(left, qRuToEn);
+              if (d <= 2) return true;
+            }
+            return false;
+          });
+        };
+        const findBestMatch = (query, items) => {
+          const q = normalize(query);
+          const direct = fuzzySearchTargets(q, items);
+          if (direct[0]) return direct[0];
+          for (const item of Array.isArray(items) ? items : []) {
+            const pronunciations = Array.isArray(item?.pronunciations) ? item.pronunciations : [];
+            for (const pron of pronunciations) {
+              const p = normalize(pron);
+              if (!p) continue;
+              if (p.includes(q) || q.includes(p)) return item;
+            }
+          }
+          return null;
+        };
+        const scannedData = (await window.api?.systemGetScannedData?.()) || { folders: [], games: [] };
+        const games = Array.isArray(scannedData.games) ? scannedData.games : [];
+        const folders = Array.isArray(scannedData.folders) ? scannedData.folders : [];
+        const gameSynonyms = {
+          дискорд: 'discord',
+          дискорт: 'discord',
+          'дис корд': 'discord',
+          дизкорд: 'discord',
+          дизкорт: 'discord',
+          стим: 'steam',
+          тим: 'steam',
+          'с тим': 'steam',
+          майнкрафт: 'minecraft',
+          'майн крафт': 'minecraft',
+        };
+        const searchTerm = gameSynonyms[nTarget] || nTarget;
+        const exeGames = games.filter((g) => g?.isExecutable === true || String(g?.path || '').toLowerCase().endsWith('.exe'));
+        let game = findBestMatch(searchTerm, exeGames);
+        if (!game) {
+          game = findBestMatch(searchTerm, games);
+        }
+        console.log('[ASR] Raw:', rawCommand);
+        console.log('[ASR] Fixed:', lowerCmd);
+        console.log('[ASR] Translit:', transliterateForSearch(lowerCmd));
+        console.log('[CMD] Target:', target);
+        console.log('[CMD] Search term:', searchTerm);
+        console.log('[CMD] Found game:', game?.name || null, game?.path || null);
+        console.log('[CMD] Is executable:', game?.isExecutable ?? null);
+        console.log('[OPEN][match game]', { query: searchTerm, queryTranslit: nTargetTranslit, game: game?.name || null });
+        if (game?.path) {
+          const result = await window.api?.openTarget?.(game.path);
+          if (result?.success) return { response: `Открываю ${game.name}` };
+          return { response: 'Не удалось открыть' };
+        }
+
+        const folder = findBestMatch(searchTerm, folders);
+        console.log('[OPEN][match folder]', { query: nTarget, queryTranslit: nTargetTranslit, folder: folder?.name || null });
+        if (folder?.path) {
+          const result = await window.api?.openTarget?.(folder.path);
+          if (result?.success) return { response: `Открываю папку ${folder.name}` };
+          return { response: 'Не удалось открыть' };
+        }
+
+        const systemPaths = {
+          программы: 'C:\\Program Files',
+          'program files': 'C:\\Program Files',
+          система: 'C:\\Windows\\System32',
+          system32: 'C:\\Windows\\System32',
+          темп: 'C:\\Windows\\Temp',
+          temp: 'C:\\Windows\\Temp',
+        };
+        const sysPath = systemPaths[nTarget];
+        if (sysPath) {
+          const openResp = await window.api?.openTarget?.(sysPath);
+          if (openResp?.success) return { response: `Открываю ${target}` };
+          return { response: 'Не удалось открыть' };
+        }
+
+        const knownTargets = {
+          браузер: ['C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe', 'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe', 'msedge.exe'],
+          browser: ['C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe', 'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe', 'msedge.exe'],
+          калькулятор: 'calc.exe',
+          calculator: 'calc.exe',
+          блокнот: 'notepad.exe',
+          notepad: 'notepad.exe',
+          проводник: 'explorer.exe',
+          explorer: 'explorer.exe',
+          настройки: 'ms-settings:',
+          settings: 'ms-settings:',
+          'диспетчер задач': 'taskmgr.exe',
+          'task manager': 'taskmgr.exe',
+          taskmgr: 'taskmgr.exe',
+          steam: 'steam',
+        };
+        const known = knownTargets[nTarget];
+        if (!known) return null;
+
+        if (Array.isArray(known)) {
+          for (const candidate of known) {
+            const openResp = await window.api?.openTarget?.(candidate);
+            if (openResp?.success) return { response: `Открываю ${target}` };
+          }
+          return { response: 'Не удалось открыть' };
+        }
+
+        if (known.startsWith('ms-settings:')) {
+          const openResp = await window.api?.openSystemSettings?.(known);
+          if (openResp?.ok) return { response: `Открываю ${target}` };
+          return { response: 'Не удалось открыть' };
+        }
+        const openResp = await window.api?.openTarget?.(known);
+        if (openResp?.success) return { response: `Открываю ${target}` };
+        return { response: 'Не удалось открыть' };
+      };
+      const launchSteam = async () => {
+        const scannedData = (await window.api?.systemGetScannedData?.()) || { games: [] };
+        const games = Array.isArray(scannedData.games) ? scannedData.games : [];
+        const exeGames = games.filter((g) => g?.isExecutable === true || String(g?.path || '').toLowerCase().endsWith('.exe'));
+        const byName = (arr, needle) =>
+          arr.find((g) => String(g?.name || '').toLowerCase().includes(String(needle || '').toLowerCase()));
+
+        const steam = byName(exeGames, 'steam') || byName(games, 'steam');
+        if (steam?.path || steam) {
+          const openResp = await window.api?.openTarget?.('steam://open/games');
+          if (openResp?.success) return { ok: true, response: 'Открываю библиотеку Steam' };
+        }
+
+        const anyGame = exeGames[0] || games[0];
+        if (anyGame?.path) {
+          const openResp = await window.api?.openTarget?.(anyGame.path);
+          if (openResp?.success) return { ok: true, response: `Запускаю ${anyGame.name}` };
+        }
+
+        return { ok: false, response: 'Steam не найден' };
+      };
+
+      const launchDiscord = async () => {
+        const scannedData = (await window.api?.systemGetScannedData?.()) || { games: [] };
+        const games = Array.isArray(scannedData.games) ? scannedData.games : [];
+        const exeGames = games.filter((g) => g?.isExecutable === true || String(g?.path || '').toLowerCase().endsWith('.exe'));
+        const byName = (arr, needle) =>
+          arr.find((g) => String(g?.name || '').toLowerCase().includes(String(needle || '').toLowerCase()));
+        const discord = byName(exeGames, 'discord') || byName(games, 'discord');
+        if (discord?.path) {
+          const openResp = await window.api?.openTarget?.(discord.path);
+          if (openResp?.success) return { ok: true, response: 'Запускаю Discord. Приятного общения!' };
+        }
+        return { ok: false, response: 'Discord не найден. Установите Discord или проверьте путь.' };
+      };
+
+      if (lowerCmd.includes('покажи микрофон') || lowerCmd.includes('show mic')) {
+        void window.api.showFloatingWindow?.();
+        speak(isEn ? 'Showing microphone overlay' : 'Показываю микрофон');
+        if (el.statusText) el.statusText.textContent = 'Оверлей: микрофон';
+        return;
+      }
+      if ((lowerCmd.includes('спрячь') || lowerCmd.includes('hide')) && (lowerCmd.includes('микрофон') || lowerCmd.includes('mic'))) {
+        void window.api.hideFloatingWindow?.();
+        speak(isEn ? 'Hiding overlay' : 'Скрываю');
+        if (el.statusText) el.statusText.textContent = 'Оверлей скрыт';
+        return;
+      }
+      if (lowerCmd.includes('покажи время') || lowerCmd.includes('show time')) {
+        void window.api.showTimeWindow?.();
+        speak(isEn ? 'Showing time' : 'Показываю время');
+        if (el.statusText) el.statusText.textContent = 'Окно времени';
+        return;
+      }
+
+      // Hotfix: прямой запуск Discord для устойчивых фраз.
+      if (
+        lowerCmd.includes('запусти общение') ||
+        lowerCmd.includes('посидим в голосе') ||
+        lowerCmd.includes('открой общение')
+      ) {
+        const discordPaths = [
+          'C:\\Users\\%USERNAME%\\AppData\\Local\\Discord\\Update.exe',
+          'C:\\ProgramData\\Discord\\Update.exe',
+          '%LOCALAPPDATA%\\Discord\\Update.exe',
+        ];
+
+        let found = false;
+        for (const p of discordPaths) {
+          const result = await window.api?.openTarget?.(p);
+          if (result?.success) {
+            speak('Запускаю Discord. Приятного общения!');
+            found = true;
+            break;
+          }
+        }
+
+        if (!found) {
+          const scanned = await window.api?.systemGetScannedData?.();
+          const discord = (Array.isArray(scanned?.games) ? scanned.games : []).find((g) =>
+            String(g?.name || '').toLowerCase().includes('discord'),
+          );
+          if (discord?.path) {
+            const opened = await window.api?.openTarget?.(discord.path);
+            if (opened?.success) speak('Запускаю Discord. Приятного общения!');
+            else speak('Discord не найден');
+          } else {
+            speak('Discord не найден');
+          }
+        }
+        return;
+      }
+
+      if (lowerCmd.includes('пора поиграть') || lowerCmd.includes('давай поиграем') || lowerCmd.includes('хочу поиграть')) {
+        const launched = await launchSteam();
+        speak(launched.response);
+        if (el.statusText) el.statusText.textContent = launched.ok ? 'Запуск Steam' : 'Steam не найден';
+        return;
+      }
+
+      if (
+        lowerCmd.includes('запусти общение') ||
+        lowerCmd.includes('открой общение') ||
+        lowerCmd.includes('давай пообщаемся') ||
+        lowerCmd.includes('хочу пообщаться') ||
+        lowerCmd.includes('посидим в голосе') ||
+        lowerCmd.includes('посидеть в голосе')
+      ) {
+        const launched = await launchDiscord();
+        speak(launched.response);
+        if (el.statusText) el.statusText.textContent = launched.ok ? 'Запуск Discord' : 'Discord не найден';
+        return;
+      }
+
       // Runtime voice settings controls (renderer-side TTS).
       if (lowerCmd === 'коннор, говори громче' || lowerCmd === 'говори громче' || lowerCmd === 'speak louder') {
         const next = clamp((Number(settings.ttsVolume) || 0.8) + 0.1, 0, 1);
@@ -985,6 +1346,7 @@ document.addEventListener('DOMContentLoaded', async () => {
           'Казино рулетка',
           'Скриншоты с OCR',
           'Напоминания и таймеры',
+          'Голосовые конспекты в файл',
           'Системные метрики',
           'Управление громкостью',
           'Открытие папок',
@@ -1001,8 +1363,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         speak(isEn ? `Timer started. ${command}` : `Таймер запущен. ${command}`);
       } else if (lowerCmd === 'останови таймер' || lowerCmd === 'стоп таймер' || lowerCmd === 'stop timer') {
         speak(isEn ? 'Timers stopped' : 'Таймеры остановлены');
-      } else if (lowerCmd.startsWith('открой ')) {
-        speak(isEn ? `Executing: ${command}` : `Выполняю: ${command}`);
+      } else if (lowerCmd.startsWith('открой ') || lowerCmd.startsWith('open ')) {
+        const target = lowerCmd.replace(/^(открой|open)\s+/i, '').trim();
+        const opened = await handleOpenCommand(target);
+        if (opened?.response) speak(opened.response);
+        else speak(`Не могу найти ${target}`);
       } else if (lowerCmd.startsWith('найди ')) {
         speak(isEn ? `Searching: ${command.replace(/^найди\s+/i, '')}` : `Ищу: ${command.replace(/^найди\s+/i, '')}`);
       }
@@ -1249,6 +1614,171 @@ document.addEventListener('DOMContentLoaded', async () => {
       };
     }
   } catch {}
+
+  // ----------------------------
+  // Голосовые конспекты (файлы в папке)
+  // ----------------------------
+  let isNotesRecording = false;
+  let notesPreviewBuffer = '';
+
+  function updateNotesUI() {
+    const startBtn = el.startNotesBtn;
+    const stopBtn = el.stopNotesBtn;
+    const cancelBtn = el.cancelNotesBtn;
+    const preview = el.notesPreview;
+    const statusDot = el.recordingStatus?.querySelector?.('.status-dot');
+    const statusText = el.recordingStatusText;
+
+    if (!startBtn || !stopBtn || !cancelBtn) return;
+
+    if (isNotesRecording) {
+      startBtn.hidden = true;
+      stopBtn.hidden = false;
+      cancelBtn.hidden = false;
+      if (preview) preview.hidden = false;
+      statusDot?.classList.add('recording');
+      if (statusText) statusText.textContent = 'Запись…';
+    } else {
+      startBtn.hidden = false;
+      stopBtn.hidden = true;
+      cancelBtn.hidden = true;
+      if (preview) preview.hidden = true;
+      statusDot?.classList.remove('recording');
+      if (statusText) statusText.textContent = 'Не записываю';
+      notesPreviewBuffer = '';
+      if (el.notesPreviewContent) el.notesPreviewContent.textContent = '';
+    }
+  }
+
+  async function loadSavedNotes() {
+    if (!el.savedNotesList || !window.api?.notesGetAll) return;
+    el.savedNotesList.innerHTML = '';
+    try {
+      const folder = el.notesFolder?.value?.trim();
+      const notes = await window.api.notesGetAll(folder || undefined);
+      const list = Array.isArray(notes) ? notes : [];
+      for (const note of list) {
+        const row = document.createElement('div');
+        row.className = 'note-item';
+        const meta = document.createElement('div');
+        meta.className = 'note-meta';
+        const nameEl = document.createElement('span');
+        nameEl.className = 'note-name';
+        nameEl.textContent = note.name || '';
+        const dateEl = document.createElement('span');
+        dateEl.className = 'note-date';
+        dateEl.textContent = note.date || '';
+        meta.appendChild(nameEl);
+        meta.appendChild(dateEl);
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'neon-btn secondary open-note';
+        btn.textContent = 'Открыть';
+        const p = note.path;
+        btn.addEventListener('click', () => {
+          if (p) void window.api?.openFilePath?.(p);
+        });
+        row.appendChild(meta);
+        row.appendChild(btn);
+        el.savedNotesList.appendChild(row);
+      }
+    } catch {}
+  }
+
+  async function startNotesRecording() {
+    let folder = el.notesFolder?.value?.trim() || '';
+    if (!folder) {
+      const picked = await window.api?.selectFolder?.();
+      if (!picked) return;
+      folder = picked;
+      if (el.notesFolder) el.notesFolder.value = folder;
+    }
+    const result = await window.api?.notesStart?.(folder);
+    if (result?.success) {
+      isNotesRecording = true;
+      notesPreviewBuffer = '';
+      updateNotesUI();
+      speak('Начинаю запись конспекта');
+    } else if (result?.error) {
+      speak(`Не удалось начать запись. ${result.error}`);
+    }
+  }
+
+  async function stopNotesRecording() {
+    const result = await window.api?.notesStop?.();
+    isNotesRecording = false;
+    updateNotesUI();
+    if (result?.success && result.filepath) {
+      speak('Конспект сохранён');
+      await loadSavedNotes();
+    } else {
+      speak('Конспект не сохранён. Нет текста или запись не велась.');
+    }
+  }
+
+  async function cancelNotesRecording() {
+    await window.api?.notesCancel?.();
+    isNotesRecording = false;
+    updateNotesUI();
+    speak('Запись конспекта отменена');
+  }
+
+  if (window.api?.onNotesRecording) {
+    window.api.onNotesRecording((payload) => {
+      const { event, data } = payload || {};
+      if (event === 'recording_started' && data?.folder && el.notesFolder) {
+        el.notesFolder.value = String(data.folder);
+      }
+      if (event === 'recording_started') {
+        isNotesRecording = true;
+        notesPreviewBuffer = '';
+        updateNotesUI();
+      }
+      if (event === 'recording_stopped' || event === 'recording_cancelled') {
+        isNotesRecording = false;
+        updateNotesUI();
+        if (event === 'recording_stopped') void loadSavedNotes();
+      }
+      if (event === 'transcript_update' && data?.text) {
+        const ts = data.timestamp || '';
+        notesPreviewBuffer += `[${ts}] ${data.text}\n`;
+        if (el.notesPreviewContent) el.notesPreviewContent.textContent = notesPreviewBuffer;
+      }
+    });
+  }
+
+  el.selectNotesFolder?.addEventListener('click', async () => {
+    const picked = await window.api?.selectFolder?.();
+    if (picked && el.notesFolder) el.notesFolder.value = picked;
+  });
+  el.btnSelectNotesFolder?.addEventListener('click', async () => {
+    const picked = await window.api?.selectFolder?.();
+    if (!picked) return;
+    if (el.settingsNotesFolder) el.settingsNotesFolder.value = picked;
+    if (el.notesFolder) el.notesFolder.value = picked;
+  });
+  el.btnSaveNotesFolder?.addEventListener('click', async () => {
+    const folder = String(el.settingsNotesFolder?.value || '').trim();
+    if (!folder) return;
+    await updateSettings({ voiceNotesFolder: folder }).catch(() => {});
+    if (el.notesFolder) el.notesFolder.value = folder;
+    setStatusText(`Папка конспектов: ${folder}`);
+  });
+  el.btnScanPC?.addEventListener('click', async () => {
+    if (el.scanStatus) el.scanStatus.textContent = '⚡ Статус: сканирование...';
+    try {
+      const result = await window.api?.systemScan?.();
+      const foldersCount = Array.isArray(result?.folders) ? result.folders.length : 0;
+      const gamesCount = Array.isArray(result?.games) ? result.games.length : 0;
+      if (el.scanStatus) el.scanStatus.textContent = `✅ Статус: найдено папок ${foldersCount}, игр/программ ${gamesCount}`;
+      setStatusText(`Сканирование завершено: ${foldersCount} папок, ${gamesCount} игр`);
+    } catch {
+      if (el.scanStatus) el.scanStatus.textContent = '❌ Статус: ошибка сканирования';
+    }
+  });
+  el.startNotesBtn?.addEventListener('click', () => void startNotesRecording());
+  el.stopNotesBtn?.addEventListener('click', () => void stopNotesRecording());
+  el.cancelNotesBtn?.addEventListener('click', () => void cancelNotesRecording());
 
   function renderMessages(messages) {
     if (!el.deepseekMessages) return;

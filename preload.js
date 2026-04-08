@@ -154,8 +154,30 @@ contextBridge.exposeInMainWorld('api', {
   notesCopy: (payload) => ipcRenderer.invoke('notes:copy', payload),
   onNotesUpdate: (callback) => ipcRenderer.on('notes:update', (_event, data) => callback(data)),
 
+  // Голосовые конспекты (файлы .txt в выбранной папке).
+  notesStart: (folder) => ipcRenderer.invoke('notes:start', folder),
+  notesStop: () => ipcRenderer.invoke('notes:stop'),
+  notesCancel: () => ipcRenderer.invoke('notes:cancel'),
+  notesGetAll: (folder) => ipcRenderer.invoke('notes:getAll', folder),
+  selectFolder: () => ipcRenderer.invoke('dialog:selectFolder'),
+  onNotesRecording: (callback) => ipcRenderer.on('notes:recording', (_event, data) => callback(data)),
+  openFilePath: (filePath) => ipcRenderer.invoke('shell:openPath', filePath),
+
   // Full music player window.
   musicOpenPlayerWindow: () => ipcRenderer.invoke('music:openPlayerWindow'),
   onMusicVoiceCommand: (callback) => ipcRenderer.on('music:voiceCommand', (_event, data) => callback(data)),
+
+  musicSearch: (query, limit) => ipcRenderer.invoke('music:searchLocal', query, limit),
+  musicToggleFavorite: (trackPath) => ipcRenderer.invoke('music:toggleFavorite', trackPath),
+
+  showFloatingWindow: () => ipcRenderer.invoke('floating:show'),
+  hideFloatingWindow: () => ipcRenderer.invoke('floating:hide'),
+  showTimeWindow: () => ipcRenderer.invoke('time:showBrief'),
+  showNotesOverlay: () => ipcRenderer.invoke('notesOverlay:show'),
+  hideNotesOverlay: () => ipcRenderer.invoke('notesOverlay:hide'),
+  systemScan: () => ipcRenderer.invoke('system:scan'),
+  systemGetScannedData: () => ipcRenderer.invoke('system:getScannedData'),
+  openSystemSettings: (uri) => ipcRenderer.invoke('system:open-settings', uri),
+  openTarget: (target) => ipcRenderer.invoke('system:open-target', target),
 });
 

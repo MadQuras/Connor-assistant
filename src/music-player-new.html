@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Connor Music</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" crossorigin="anonymous" />
+    <link rel="stylesheet" href="./styles/theme.css" />
+    <link rel="stylesheet" href="./styles/music-player-new.css" />
+  </head>
+  <body>
+    <div class="music-container">
+      <aside class="sidebar">
+        <div class="logo">
+          <i class="fas fa-headphones" aria-hidden="true"></i>
+          <span>CONNOR</span>
+          <small>MUSIC</small>
+        </div>
+
+        <nav class="nav">
+          <button type="button" class="nav-btn active" data-view="playlists">
+            <i class="fas fa-list" aria-hidden="true"></i>
+            <span>Плейлисты</span>
+          </button>
+          <button type="button" class="nav-btn" data-view="favorites">
+            <i class="fas fa-heart" aria-hidden="true"></i>
+            <span>Любимые</span>
+          </button>
+          <button type="button" class="nav-btn" data-view="search">
+            <i class="fas fa-search" aria-hidden="true"></i>
+            <span>Поиск</span>
+          </button>
+          <button type="button" class="nav-btn" data-view="library">
+            <i class="fas fa-folder-open" aria-hidden="true"></i>
+            <span>Библиотека</span>
+          </button>
+        </nav>
+      </aside>
+
+      <div class="main-wrap">
+        <main class="main-content">
+          <div class="view-pane active" id="playlists-view">
+            <div class="view-header">
+              <h2><i class="fas fa-list" aria-hidden="true"></i> Мои плейлисты</h2>
+              <button type="button" id="createPlaylistBtn" class="btn-primary">
+                <i class="fas fa-plus" aria-hidden="true"></i> Новый
+              </button>
+            </div>
+            <div id="playlistsGrid" class="playlists-grid"></div>
+          </div>
+
+          <div class="view-pane" id="favorites-view">
+            <div class="view-header">
+              <h2><i class="fas fa-heart" aria-hidden="true"></i> Любимые треки</h2>
+            </div>
+            <div id="favoritesList" class="tracks-list"></div>
+          </div>
+
+          <div class="view-pane" id="search-view">
+            <div class="view-header">
+              <h2><i class="fas fa-search" aria-hidden="true"></i> Поиск музыки</h2>
+            </div>
+            <div class="search-box">
+              <input type="text" id="searchInput" placeholder="Название или путь к файлу…" />
+              <button type="button" id="searchBtn" class="btn-primary">
+                <i class="fas fa-search" aria-hidden="true"></i> Найти
+              </button>
+            </div>
+            <div id="searchResults" class="tracks-list"></div>
+          </div>
+
+          <div class="view-pane" id="library-view">
+            <div class="view-header">
+              <h2><i class="fas fa-folder-open" aria-hidden="true"></i> Моя библиотека</h2>
+              <button type="button" id="scanBtn" class="btn-secondary">
+                <i class="fas fa-sync-alt" aria-hidden="true"></i> Сканировать
+              </button>
+            </div>
+            <div id="libraryList" class="tracks-list"></div>
+          </div>
+
+        </main>
+
+        <footer class="player-bar">
+          <div class="now-playing-info">
+            <div class="artwork" id="artwork">
+              <i class="fas fa-music" aria-hidden="true"></i>
+            </div>
+            <div class="track-details">
+              <span id="trackTitle">Не выбрано</span>
+              <span id="trackArtist"></span>
+            </div>
+          </div>
+
+          <div class="player-controls">
+            <button type="button" id="prevBtn" class="ctrl-btn" aria-label="Предыдущий">
+              <i class="fas fa-backward-step" aria-hidden="true"></i>
+            </button>
+            <button type="button" id="playPauseBtn" class="ctrl-btn play" aria-label="Пауза / играть">
+              <i class="fas fa-play" aria-hidden="true"></i>
+            </button>
+            <button type="button" id="nextBtn" class="ctrl-btn" aria-label="Следующий">
+              <i class="fas fa-forward-step" aria-hidden="true"></i>
+            </button>
+          </div>
+
+          <div class="progress-area">
+            <span id="currentTime">0:00</span>
+            <input type="range" id="progressBar" class="progress-slider" value="0" min="0" max="100" />
+            <span id="totalTime">0:00</span>
+          </div>
+
+          <div class="volume-area">
+            <i class="fas fa-volume-up" aria-hidden="true"></i>
+            <input type="range" id="volumeSlider" class="volume-slider" value="70" min="0" max="100" />
+          </div>
+        </footer>
+      </div>
+    </div>
+
+    <script src="./scripts/music-player-new.js"></script>
+  </body>
+</html>

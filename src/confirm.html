@@ -4,10 +4,11 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
     <title>Подтверждение</title>
+    <link rel="stylesheet" href="./styles/theme.css" />
     <style>
       body {
-        background: rgba(10, 10, 26, 0.95);
-        backdrop-filter: blur(20px);
+        background: linear-gradient(135deg, var(--bg) 0%, color-mix(in srgb, var(--surface) 82%, #000 18%) 100%);
+        backdrop-filter: blur(12px);
         display: flex;
         align-items: center;
         justify-content: center;
@@ -16,24 +17,28 @@
         font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
       }
       .confirm-card {
-        background: rgba(20, 20, 40, 0.9);
-        border: 1px solid rgba(45, 212, 191, 0.4);
-        border-radius: 28px;
+        background: color-mix(in srgb, var(--surface) 84%, transparent 16%);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-card);
+        backdrop-filter: blur(12px);
+        box-shadow: 0 6px 18px rgba(0, 0, 0, 0.2);
         padding: 28px 32px;
         width: 300px;
         text-align: center;
       }
-      .message { color: #e2e8f0; margin-bottom: 24px; font-size: 16px; }
+      .message { color: var(--text); margin-bottom: 24px; font-size: 16px; }
       .buttons { display: flex; gap: 12px; justify-content: center; }
       button {
         padding: 8px 24px;
-        border-radius: 40px;
-        border: none;
+        border-radius: var(--radius-pill);
+        border: 1px solid var(--border);
         cursor: pointer;
         font-weight: 600;
+        transition: transform 0.2s ease, border-color 0.2s ease;
       }
-      .confirm { background: #2dd4bf; color: #0a0a1a; }
-      .cancel { background: rgba(255, 255, 255, 0.1); color: #e2e8f0; }
+      button:hover { transform: translateY(-2px); }
+      .confirm { background: var(--accent); color: var(--bg); }
+      .cancel { background: color-mix(in srgb, var(--surface-soft) 86%, transparent 14%); color: var(--text); }
     </style>
   </head>
   <body>

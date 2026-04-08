@@ -1,0 +1,110 @@
+.floating-card {
+  width: 280px;
+  min-height: 104px;
+  box-sizing: border-box;
+  background: rgba(20, 20, 35, 0.62);
+  backdrop-filter: blur(12px) saturate(110%);
+  border-radius: var(--radius-card);
+  border: 1px solid var(--border);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.32);
+  padding: 10px 12px 12px;
+  color: #e2e8f0;
+  position: relative;
+}
+
+.drag-area {
+  -webkit-app-region: drag;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.status-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.avatar-c {
+  width: 36px;
+  height: 36px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--accent-soft);
+  display: grid;
+  place-items: center;
+  color: var(--accent);
+  font-family: 'SF Mono', ui-monospace, Menlo, Consolas, monospace;
+  font-size: 22px;
+  line-height: 1;
+  font-weight: 500;
+}
+
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.8);
+}
+
+.status-dot.on {
+  background: var(--accent);
+}
+
+.status-text {
+  font-size: 12px;
+  font-weight: 600;
+  color: rgba(226, 232, 240, 0.92);
+}
+
+.transcript {
+  margin-top: 8px;
+  font-size: 12px;
+  color: rgba(226, 232, 240, 0.75);
+  white-space: normal;
+  overflow-y: auto;
+  overflow-x: hidden;
+  max-height: 32px;
+  line-height: 1.2;
+}
+
+.command {
+  margin-top: 4px;
+  font-size: 11px;
+  color: var(--accent);
+  white-space: normal;
+  overflow-y: auto;
+  overflow-x: hidden;
+  max-height: 28px;
+  line-height: 1.2;
+}
+
+.mic-volume {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  -webkit-app-region: no-drag;
+}
+
+.mic-volume i {
+  font-size: 12px;
+  color: var(--accent);
+  flex-shrink: 0;
+}
+
+.mic-volume-track {
+  flex: 1;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.volume-bar {
+  width: 0%;
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent), #5eead4);
+  transition: width 0.06s linear;
+}

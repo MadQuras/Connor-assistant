@@ -1,52 +1,40 @@
-const led = document.getElementById('led') || document.getElementById('statusLed');
+const statusDot = document.getElementById('statusDot');
 const statusText = document.getElementById('statusText');
-const transcriptEl = document.getElementById('transcript') || document.getElementById('transcriptText');
-const commandEl = document.getElementById('commandPreview') || document.getElementById('commandText');
-
-let commandTimer = null;
+const transcriptEl = document.getElementById('transcript');
+const micVolumeBar = document.getElementById('micVolumeBar');
 
 function setListening(listening) {
   const on = !!listening;
-  if (led) led.classList.toggle('listening', on);
-  if (statusText) statusText.textContent = on ? '🎤 Слушаю...' : 'Ожидание';
+  if (statusDot) statusDot.classList.toggle('on', on);
+  if (statusText) statusText.textContent = on ? 'Слушаю' : 'Ожидание';
 }
 
-function setTranscriptText(transcript) {
+function setTranscript(text) {
   if (!transcriptEl) return;
-  const t = typeof transcript === 'string' ? transcript.trim() : '';
+  const t = typeof text === 'string' ? text.trim() : '';
   transcriptEl.textContent = t ? t : '—';
 }
 
-function showCommand(command) {
-  if (!commandEl) return;
-  const cmd = String(command || '').trim();
-  commandEl.textContent = cmd ? cmd : '';
-  commandEl.classList.add('visible');
-
-  if (commandTimer) clearTimeout(commandTimer);
-  commandTimer = setTimeout(() => {
-    try {
-      commandEl.classList.remove('visible');
-      commandEl.textContent = '';
-    } catch {}
-  }, 3000);
+function setMicLevel(payload) {
+  if (!micVolumeBar) return;
+  const raw = typeof payload === 'number' ? payload : Number(payload?.level);
+  const v = Number.isFinite(raw) ? Math.max(0, Math.min(1, raw)) : 0;
+  micVolumeBar.style.width = `${v * 100}%`;
 }
 
 window.api?.onVoiceStatus?.((data) => {
   try {
     setListening(!!data?.listening);
-    setTranscriptText(data?.transcript || '—');
+    setTranscript(data?.transcript);
   } catch {}
 });
 
-window.api?.onVoiceCommand?.((data) => {
+window.api?.onVoiceMicLevel?.((payload) => {
   try {
-    // Показываем распознанную команду отдельно от транскрипта.
-    showCommand(data?.result || (data?.command ? `⚡ ${data.command}` : data?.rawTranscript));
+    setMicLevel(payload);
   } catch {}
 });
 
 setListening(false);
-setTranscriptText('—');
-if (commandEl) commandEl.classList.remove('visible');
-
+setTranscript('—');
+setMicLevel(0);

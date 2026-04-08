@@ -2,7 +2,7 @@ const path = require('path');
 const { app, BrowserWindow, Tray, Menu, Notification, globalShortcut, ipcMain, session, clipboard, screen, dialog, shell } = require('electron');
 const { default: Store } = require('electron-store');
 const fs = require('fs');
-const { spawn, spawnSync } = require('child_process');
+const { spawn, spawnSync, exec } = require('child_process');
 let autoUpdater = null;
 try {
   // eslint-disable-next-line global-require
@@ -15,12 +15,19 @@ try {
 } catch {}
 
 const si = require('systeminformation');
+const { SystemScanner } = require('./src/services/system-scanner');
 async function getActiveWindow() {
   return null;
 }
 
+const APP_DATA_DIR = app.getPath('userData');
+const LOG_DIR = path.join(APP_DATA_DIR, 'logs');
+const CACHE_DIR = path.join(APP_DATA_DIR, 'cache');
+const DEFAULT_NOTES_DIR = path.join(app.getPath('documents'), 'ConnorNotes');
+const DEFAULT_MUSIC_DIR = path.join(app.getPath('music'));
+
 // Проверяем наличие Vosk модели (отладка для принудительного офлайн-режима).
-const voskModelPath = path.join(__dirname, 'models', 'vosk-ru');
+const voskModelPath = path.join(__dirname, 'resources', 'models', 'vosk-ru');
 try {
   // eslint-disable-next-line no-console
   console.log('🔍 Проверка Vosk модели:', voskModelPath);
@@ -62,6 +69,7 @@ const store = new Store({
       ],
       activePlaylistId: 'playlist_1',
       activeTrackIndex: 0,
+      favorites: [],
     },
     musicTracks: [],
     connorFloating: { x: null, y: null },
@@ -82,6 +90,8 @@ const store = new Store({
     },
     notes: [],
     clipboardHistory: [],
+    voiceNotesFolder: DEFAULT_NOTES_DIR,
+    musicScanFolders: [DEFAULT_MUSIC_DIR],
   },
 });
 
@@ -94,11 +104,13 @@ let systemConfirmWindow = null;
 let plannerWindow = null;
 let timeWindow = null;
 let notesWindow = null;
+let notesOverlayWindow = null;
 let musicPlayerFullWindow = null;
+let timeWindowAutoHideTimer = null;
 let systemPendingAction = null;
 let systemConfirmInterval = null;
 const CONNOR_FLOAT_W = 320;
-const CONNOR_FLOAT_H = 120;
+const CONNOR_FLOAT_H = 132;
 const CONNOR_FLOAT_MARGIN = 16;
 let screenshotController = null;
 let tray = null;
@@ -117,7 +129,7 @@ let robotjsMissingNotified = false;
 let voskModelMissingNotified = false;
 let nodeScheduleMissingNotified = false;
 
-const connorCachePath = path.join(app.getPath('userData'), 'connor-cache.json');
+const connorCachePath = path.join(CACHE_DIR, 'connor-cache.json');
 
 function getOnboardingRoots() {
   const home = app.getPath('home');
@@ -276,9 +288,8 @@ function notifyOnce(title, body) {
 
 function logVoiceError(message, err, context) {
   try {
-    const logDir = path.join(__dirname, 'logs');
-    fs.mkdirSync(logDir, { recursive: true });
-    const logPath = path.join(logDir, 'voice-error.log');
+    fs.mkdirSync(LOG_DIR, { recursive: true });
+    const logPath = path.join(LOG_DIR, 'voice-error.log');
     const payload = {
       ts: new Date().toISOString(),
       message: String(message || 'voice-error'),
@@ -291,9 +302,8 @@ function logVoiceError(message, err, context) {
 
 function logVoiceTrace(event, payload) {
   try {
-    const logDir = path.join(__dirname, 'logs');
-    fs.mkdirSync(logDir, { recursive: true });
-    const logPath = path.join(logDir, 'voice-trace.log');
+    fs.mkdirSync(LOG_DIR, { recursive: true });
+    const logPath = path.join(LOG_DIR, 'voice-trace.log');
     const row = {
       ts: new Date().toISOString(),
       event: String(event || 'voice-trace'),
@@ -305,9 +315,8 @@ function logVoiceTrace(event, payload) {
 
 function logSystemError(message, err, context) {
   try {
-    const logDir = path.join(__dirname, 'logs');
-    fs.mkdirSync(logDir, { recursive: true });
-    const logPath = path.join(logDir, 'system-error.log');
+    fs.mkdirSync(LOG_DIR, { recursive: true });
+    const logPath = path.join(LOG_DIR, 'system-error.log');
     const payload = {
       ts: new Date().toISOString(),
       message: String(message || 'system-error'),
@@ -377,11 +386,107 @@ function normalizeRuText(text) {
     .trim();
 }
 
+function resolveVoiceNotesFolderPath(spec) {
+  const s = String(spec || '').trim().replace(/[.!?…]+$/g, '');
+  if (!s) return null;
+  const withSep = s.replace(/\//g, path.sep);
+  if (path.isAbsolute(withSep)) return path.normalize(withSep);
+  return path.normalize(path.join(app.getPath('documents'), withSep));
+}
+
+function createVoiceNotesRecorder() {
+  const state = { isRecording: false, currentFolder: null, recordedLines: [] };
+
+  function notify(event, data) {
+    try {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('notes:recording', { event, data });
+      }
+      if (notesOverlayWindow && !notesOverlayWindow.isDestroyed()) {
+        notesOverlayWindow.webContents.send('notes:recording', { event, data });
+      }
+    } catch {}
+  }
+
+  function shouldSkipLine(norm) {
+    if (!norm) return true;
+    if (norm.includes('сохрани конспект')) return true;
+    if (norm.includes('отмени конспект')) return true;
+    if (/начни\s+конспект/.test(norm)) return true;
+    return false;
+  }
+
+  return {
+    isActive() {
+      return state.isRecording;
+    },
+    start(folderPath) {
+      try {
+        const full = path.resolve(folderPath);
+        fs.mkdirSync(full, { recursive: true });
+        state.isRecording = true;
+        state.currentFolder = full;
+        state.recordedLines = [];
+        try {
+          store.set('voiceNotesFolder', full);
+        } catch {}
+        notify('recording_started', { folder: full });
+        return true;
+      } catch (e) {
+        notify('error', String(e?.message || e));
+        return false;
+      }
+    },
+    stop() {
+      if (!state.isRecording) return null;
+      state.isRecording = false;
+      const folder = state.currentFolder;
+      const lines = state.recordedLines.slice();
+      state.recordedLines = [];
+      state.currentFolder = null;
+      if (!lines.length) {
+        notify('recording_cancelled', 'Нет текста');
+        return null;
+      }
+      const now = new Date();
+      const pad = (n) => String(n).padStart(2, '0');
+      const filename = `${pad(now.getDate())}.${pad(now.getMonth() + 1)}.${now.getFullYear()}.txt`;
+      const filepath = path.join(folder, filename);
+      const header = `Конспект от ${pad(now.getDate())}.${pad(now.getMonth() + 1)}.${now.getFullYear()} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}\n${'='.repeat(50)}\n\n`;
+      const body = `${lines.map((l) => `${l}\n`).join('')}`;
+      fs.writeFileSync(filepath, header + body, 'utf8');
+      const result = filepath;
+      notify('recording_stopped', { filepath: result });
+      return result;
+    },
+    cancel() {
+      state.isRecording = false;
+      state.currentFolder = null;
+      state.recordedLines = [];
+      notify('recording_cancelled', 'Отменено пользователем');
+    },
+    appendTranscript(raw, norm) {
+      if (!state.isRecording) return;
+      const text = String(raw || '').trim();
+      if (!text) return;
+      if (shouldSkipLine(norm)) return;
+      const now = new Date();
+      const pad = (n) => String(n).padStart(2, '0');
+      const ts = `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+      const line = `[${ts}] ${text}`;
+      state.recordedLines.push(line);
+      notify('transcript_update', { text, timestamp: ts });
+    },
+  };
+}
+
+const voiceNotesRecorder = createVoiceNotesRecorder();
+
 class VoiceController {
   constructor({
     mainWindowGetter,
     wakeWord = 'коннор',
-    voskModelPath = process.env.VOSK_MODEL_PATH || path.join(__dirname, 'models', 'vosk-ru'),
+    voskModelPath = process.env.VOSK_MODEL_PATH || path.join(__dirname, 'resources', 'models', 'vosk-ru'),
     sampleRate = 16000,
   } = {}) {
     this.mainWindowGetter = mainWindowGetter;
@@ -412,6 +517,7 @@ class VoiceController {
     this._arecordProc = null;
 
     this._webSpeechFallbackTriggered = false;
+    this._transcriptCallbacks = new Set();
   }
 
   normalizeText(text) {
@@ -674,6 +780,12 @@ class VoiceController {
     return () => this._callbacks.delete(callback);
   }
 
+  onTranscript(callback) {
+    if (typeof callback !== 'function') return () => {};
+    this._transcriptCallbacks.add(callback);
+    return () => this._transcriptCallbacks.delete(callback);
+  }
+
   _isSafeLocalPath(p) {
     if (typeof p !== 'string') return false;
     const s = p.trim();
@@ -715,9 +827,12 @@ class VoiceController {
     const candidates = [
       // Для установленного приложения.
       path.join(process.resourcesPath, 'models', 'vosk-ru'),
+      path.join(process.resourcesPath, 'resources', 'models', 'vosk-ru'),
       // Для разработки.
+      path.join(__dirname, 'resources', 'models', 'vosk-ru'),
       path.join(__dirname, 'models', 'vosk-ru'),
       // Для portable-версии.
+      path.join(process.cwd(), 'resources', 'models', 'vosk-ru'),
       path.join(process.cwd(), 'models', 'vosk-ru'),
       // Пользовательский путь.
       this._configuredVoskModelPath,
@@ -739,6 +854,15 @@ class VoiceController {
     const normalized = this.normalizeText(text);
     if (!normalized) return;
     logVoiceTrace('stt:transcript', { raw: String(text || '').slice(0, 180), normalized: normalized.slice(0, 180) });
+
+    const rawTrim = String(text || '').trim();
+    for (const cb of this._transcriptCallbacks) {
+      try {
+        cb(rawTrim, normalized);
+      } catch (err) {
+        logVoiceError('transcript callback failed', err, { stage: 'handleTranscript' });
+      }
+    }
 
     // Показываем "что слышит" в основном UI и mini-оверлее.
     try {
@@ -800,6 +924,8 @@ class VoiceController {
       'чат',
       'тест',
       'микро',
+      'микрофон',
+      'спрячь',
       'time',
       'date',
       'weather',
@@ -810,6 +936,7 @@ class VoiceController {
       'lock',
       'shutdown',
       'restart',
+      'конспект',
     ];
     if (directCommandHints.some((h) => normalized.includes(h))) {
       logVoiceTrace('direct-command:fallback', { cmd: normalized.slice(0, 180) });
@@ -885,7 +1012,10 @@ class VoiceController {
           stage: 'resolveLocalVoskModelDir',
           candidates: [
             path.join(process.resourcesPath, 'models', 'vosk-ru'),
+            path.join(process.resourcesPath, 'resources', 'models', 'vosk-ru'),
+            path.join(__dirname, 'resources', 'models', 'vosk-ru'),
             path.join(__dirname, 'models', 'vosk-ru'),
+            path.join(process.cwd(), 'resources', 'models', 'vosk-ru'),
             path.join(process.cwd(), 'models', 'vosk-ru'),
             this._configuredVoskModelPath,
           ],
@@ -2064,6 +2194,7 @@ class ScreenshotController {
         alwaysOnTop: true,
         skipTaskbar: true,
         focusable: true,
+        autoHideMenuBar: true,
         backgroundColor: '#00000000',
         webPreferences: {
           preload: path.join(__dirname, 'preload.js'),
@@ -2071,6 +2202,9 @@ class ScreenshotController {
           nodeIntegration: false,
         },
       });
+      try {
+        overlayWindow.setMenuBarVisibility(false);
+      } catch {}
 
       overlayWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(overlayHtml)}`);
 
@@ -2954,6 +3088,7 @@ async function collectSystemSnapshot() {
 
 function sendSystemUpdate() {
   if (!mainWindow || mainWindow.isDestroyed()) return;
+  if (!mainWindow.isVisible() || mainWindow.isMinimized()) return;
   collectSystemSnapshot()
     .then((snapshot) => {
       mainWindow.webContents.send('system:update', snapshot);
@@ -2963,7 +3098,7 @@ function sendSystemUpdate() {
 
 function startSystemMonitoring() {
   if (systemTimer) clearInterval(systemTimer);
-  systemTimer = setInterval(sendSystemUpdate, 2000);
+  systemTimer = setInterval(sendSystemUpdate, 5000);
   sendSystemUpdate();
 }
 
@@ -3215,10 +3350,72 @@ function createMainWindow() {
         mainWindowGetter: () => mainWindow,
         wakeWord: 'Коннор',
       });
+      voiceController.onTranscript((raw, norm) => {
+        voiceNotesRecorder.appendTranscript(raw, norm);
+      });
       voiceController.onCommand(async ({ command, rawTranscript, ts }) => {
         const spoken = normalizeRuText(command);
         const hasAny = (...parts) => parts.some((p) => spoken.includes(p));
         logVoiceTrace('command:received', { command: String(command || '').slice(0, 180), spoken: spoken.slice(0, 180) });
+
+        // Голосовые конспекты: запись в файл (путь из фразы или из настроек вкладки).
+        {
+          const rawPhrase = String(rawTranscript || command || '').trim();
+          const mStart = rawPhrase.match(/начни\s+конспект\s+в\s+(.+)/i);
+          if (mStart) {
+            const spec = mStart[1].trim().replace(/[.!?…]+$/g, '');
+            const target = resolveVoiceNotesFolderPath(spec);
+            if (!target) {
+              try {
+                new Notification({ title: 'Конспекты', body: 'Не удалось разобрать папку для конспекта.' }).show();
+              } catch {}
+              sendToConnorFloating('voice:command', { command, rawTranscript, ts, result: 'Не удалось разобрать папку' });
+            } else if (voiceNotesRecorder.start(target)) {
+              try {
+                new Notification({ title: 'Конспекты', body: 'Запись конспекта начата.' }).show();
+              } catch {}
+              sendToConnorFloating('voice:command', { command, rawTranscript, ts, result: 'Запись конспекта начата' });
+            } else {
+              try {
+                new Notification({ title: 'Конспекты', body: 'Не удалось начать запись.' }).show();
+              } catch {}
+              sendToConnorFloating('voice:command', { command, rawTranscript, ts, result: 'Не удалось начать запись' });
+            }
+            if (mainWindow && !mainWindow.isDestroyed()) {
+              mainWindow.webContents.send('voice:command', { command, rawTranscript, ts });
+            }
+            return;
+          }
+          if (spoken.includes('сохрани конспект')) {
+            const fp = voiceNotesRecorder.stop();
+            if (fp) {
+              try {
+                new Notification({ title: 'Конспекты', body: `Сохранено: ${path.basename(fp)}` }).show();
+              } catch {}
+              sendToConnorFloating('voice:command', { command, rawTranscript, ts, result: 'Конспект сохранён' });
+            } else {
+              try {
+                new Notification({ title: 'Конспекты', body: 'Нет строк для сохранения или запись не велась.' }).show();
+              } catch {}
+              sendToConnorFloating('voice:command', { command, rawTranscript, ts, result: 'Нечего сохранять' });
+            }
+            if (mainWindow && !mainWindow.isDestroyed()) {
+              mainWindow.webContents.send('voice:command', { command, rawTranscript, ts });
+            }
+            return;
+          }
+          if (spoken.includes('отмени конспект')) {
+            voiceNotesRecorder.cancel();
+            try {
+              new Notification({ title: 'Конспекты', body: 'Запись отменена.' }).show();
+            } catch {}
+            sendToConnorFloating('voice:command', { command, rawTranscript, ts, result: 'Конспект отменён' });
+            if (mainWindow && !mainWindow.isDestroyed()) {
+              mainWindow.webContents.send('voice:command', { command, rawTranscript, ts });
+            }
+            return;
+          }
+        }
 
         const openExternal = async (url, title = 'Connor', body = 'Открываю ссылку') => {
           try {
@@ -3290,9 +3487,24 @@ function createMainWindow() {
             return;
           }
 
-          if (hasAny('покажи заметки', 'открой заметки', 'заметки')) {
-            createNotesWindow();
-            sendToConnorFloating('voice:command', { command, rawTranscript, ts, result: 'Открываю заметки' });
+          if (hasAny('покажи заметки', 'открой заметки', 'заметки', 'открой конспекты', 'покажи конспекты')) {
+            createNotesOverlayWindow()?.show();
+            sendToConnorFloating('voice:command', { command, rawTranscript, ts, result: 'Открываю конспекты' });
+            return;
+          }
+
+          if (hasAny('скрой конспекты', 'спрячь конспекты')) {
+            try {
+              notesOverlayWindow?.hide();
+            } catch {}
+            sendToConnorFloating('voice:command', { command, rawTranscript, ts, result: 'Скрываю конспекты' });
+            return;
+          }
+
+          if (hasAny('начни конспект')) {
+            const folder = String(store.get('voiceNotesFolder') || DEFAULT_NOTES_DIR);
+            const ok = voiceNotesRecorder.start(folder);
+            sendToConnorFloating('voice:command', { command, rawTranscript, ts, result: ok ? 'Запись конспекта начата' : 'Не удалось начать запись' });
             return;
           }
 
@@ -4207,6 +4419,7 @@ function createConnorFloatingWindow() {
     skipTaskbar: true,
     movable: true,
     resizable: false,
+    autoHideMenuBar: true,
     title: 'Connor',
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
@@ -4214,6 +4427,9 @@ function createConnorFloatingWindow() {
       nodeIntegration: false,
     },
   });
+  try {
+    connorFloatingWindow.setMenuBarVisibility(false);
+  } catch {}
 
   try {
     connorFloatingWindow.loadFile(floatingPath);
@@ -4260,6 +4476,7 @@ function createMusicScannerWindow() {
     width: 480,
     height: 640,
     show: false,
+    autoHideMenuBar: true,
     backgroundColor: '#000000',
     title: 'Music Scanner',
     alwaysOnTop: true,
@@ -4269,6 +4486,9 @@ function createMusicScannerWindow() {
       nodeIntegration: false,
     },
   });
+  try {
+    musicScannerWindow.setMenuBarVisibility(false);
+  } catch {}
 
   musicScannerWindow.loadFile(scannerPath);
   musicScannerWindow.on('closed', () => {
@@ -4292,6 +4512,7 @@ function createCasinoWindow() {
     width: 980,
     height: 720,
     show: false,
+    autoHideMenuBar: true,
     backgroundColor: '#050510',
     title: 'Casino - Connor Assistant',
     webPreferences: {
@@ -4300,6 +4521,9 @@ function createCasinoWindow() {
       nodeIntegration: false,
     },
   });
+  try {
+    casinoWindow.setMenuBarVisibility(false);
+  } catch {}
 
   casinoWindow.loadFile(casinoPath);
   casinoWindow.on('closed', () => {
@@ -4314,6 +4538,7 @@ function createPlannerWindow() {
     width: 800,
     height: 500,
     show: false,
+    autoHideMenuBar: true,
     backgroundColor: '#050510',
     title: 'Planner - Connor Assistant',
     webPreferences: {
@@ -4322,6 +4547,9 @@ function createPlannerWindow() {
       nodeIntegration: false,
     },
   });
+  try {
+    plannerWindow.setMenuBarVisibility(false);
+  } catch {}
   plannerWindow.loadFile(plannerPath);
   plannerWindow.on('closed', () => {
     plannerWindow = null;
@@ -4344,6 +4572,7 @@ function createTimeWindow() {
     height: 300,
     show: false,
     resizable: false,
+    autoHideMenuBar: true,
     backgroundColor: '#050510',
     title: 'Время',
     webPreferences: {
@@ -4352,6 +4581,9 @@ function createTimeWindow() {
       nodeIntegration: false,
     },
   });
+  try {
+    timeWindow.setMenuBarVisibility(false);
+  } catch {}
   timeWindow.loadFile(p);
   timeWindow.on('closed', () => {
     timeWindow = null;
@@ -4374,6 +4606,7 @@ function createNotesWindow() {
     width: 600,
     height: 400,
     show: false,
+    autoHideMenuBar: true,
     backgroundColor: '#050510',
     title: 'Notes - Connor Assistant',
     webPreferences: {
@@ -4382,6 +4615,9 @@ function createNotesWindow() {
       nodeIntegration: false,
     },
   });
+  try {
+    notesWindow.setMenuBarVisibility(false);
+  } catch {}
   notesWindow.loadFile(p);
   notesWindow.on('closed', () => {
     notesWindow = null;
@@ -4397,6 +4633,39 @@ function createNotesWindow() {
   return notesWindow;
 }
 
+function createNotesOverlayWindow() {
+  if (notesOverlayWindow && !notesOverlayWindow.isDestroyed()) return notesOverlayWindow;
+  const p = path.join(__dirname, 'src', 'windows', 'notes-overlay', 'index.html');
+  notesOverlayWindow = new BrowserWindow({
+    width: 300,
+    height: 400,
+    show: false,
+    frame: false,
+    transparent: true,
+    alwaysOnTop: true,
+    skipTaskbar: true,
+    movable: true,
+    resizable: false,
+    autoHideMenuBar: true,
+    title: 'Connor Notes Overlay',
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+    },
+  });
+  try {
+    notesOverlayWindow.setMenuBarVisibility(false);
+    notesOverlayWindow.setAlwaysOnTop(true, 'screen-saver');
+    notesOverlayWindow.setVisibleOnAllWorkspaces(true);
+  } catch {}
+  notesOverlayWindow.loadFile(p);
+  notesOverlayWindow.on('closed', () => {
+    notesOverlayWindow = null;
+  });
+  return notesOverlayWindow;
+}
+
 function sendNotesUpdate() {
   try {
     if (!notesWindow || notesWindow.isDestroyed()) return;
@@ -4407,11 +4676,14 @@ function sendNotesUpdate() {
 
 function createMusicPlayerFullWindow() {
   if (musicPlayerFullWindow && !musicPlayerFullWindow.isDestroyed()) return musicPlayerFullWindow;
-  const p = path.join(__dirname, 'src', 'music-player-window.html');
+  const p = path.join(__dirname, 'src', 'music-player-new.html');
   musicPlayerFullWindow = new BrowserWindow({
-    width: 900,
-    height: 600,
+    width: 1400,
+    height: 900,
+    minWidth: 1100,
+    minHeight: 700,
     show: false,
+    autoHideMenuBar: true,
     backgroundColor: '#050510',
     title: 'Music Player - Connor Assistant',
     webPreferences: {
@@ -4420,6 +4692,9 @@ function createMusicPlayerFullWindow() {
       nodeIntegration: false,
     },
   });
+  try {
+    musicPlayerFullWindow.setMenuBarVisibility(false);
+  } catch {}
   musicPlayerFullWindow.loadFile(p);
   musicPlayerFullWindow.on('closed', () => {
     musicPlayerFullWindow = null;
@@ -4456,7 +4731,7 @@ function sendPlannerUpdate() {
 }
 
 async function scanMp3FilesFromRoots(roots, { maxFiles = 5000 } = {}) {
-  const extensions = new Set(['.mp3']);
+  const extensions = new Set(['.mp3', '.flac', '.wav']);
   const results = [];
   const visited = new Set();
 
@@ -4503,6 +4778,107 @@ async function scanMp3FilesFromRoots(roots, { maxFiles = 5000 } = {}) {
   return results;
 }
 
+function loadDemoPlaylistTemplate() {
+  const demoPlaylistPath = path.join(__dirname, 'resources', 'demo-playlist.json');
+  const demoMusicDir = path.join(__dirname, 'resources', 'demo-music');
+  const base = { id: 'demo_playlist', name: 'Предложенные автором', tracks: [] };
+
+  try {
+    if (fs.existsSync(demoPlaylistPath)) {
+      const raw = fs.readFileSync(demoPlaylistPath, 'utf8');
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === 'object') {
+        base.id = String(parsed.id || base.id);
+        base.name = String(parsed.name || base.name);
+        base.tracks = Array.isArray(parsed.tracks) ? parsed.tracks : [];
+      }
+    }
+  } catch {}
+
+  // Fallback: если JSON не задан, строим плейлист из demo-music.
+  if (!base.tracks.length) {
+    try {
+      const files = fs
+        .readdirSync(demoMusicDir)
+        .filter((f) => /\.mp3$/i.test(f))
+        .slice(0, 15);
+      base.tracks = files.map((name, idx) => ({
+        path: path.join('resources', 'demo-music', name),
+        title: path.parse(name).name || `Demo Track ${idx + 1}`,
+        artist: 'Connor Demo',
+      }));
+    } catch {}
+  }
+
+  const normalizeName = (s) =>
+    String(s || '')
+      .toLowerCase()
+      .replace(/ё/g, 'е')
+      .replace(/[^\p{L}\p{N}]+/gu, '');
+  const demoMusicFiles = (() => {
+    try {
+      return fs.readdirSync(demoMusicDir).filter((f) => /\.mp3$/i.test(f));
+    } catch {
+      return [];
+    }
+  })();
+  const resolveDemoTrackPath = (rawPath) => {
+    const target = String(rawPath || '').trim();
+    if (!target) return '';
+    const abs = path.isAbsolute(target) ? target : path.join(__dirname, target);
+    if (fs.existsSync(abs)) return abs;
+    const wantedBase = normalizeName(path.parse(target).name);
+    if (!wantedBase) return '';
+    const match = demoMusicFiles.find((f) => normalizeName(path.parse(f).name) === wantedBase);
+    return match ? path.join(demoMusicDir, match) : '';
+  };
+
+  const normalizedTracks = (base.tracks || [])
+    .map((t, idx) => {
+      const rawPath = String(t?.path || '').trim();
+      if (!rawPath) return null;
+      const absPath = resolveDemoTrackPath(rawPath);
+      if (!absPath) return null;
+      return {
+        path: absPath,
+        title: String(t?.title || path.parse(absPath).name || `Demo Track ${idx + 1}`),
+        artist: String(t?.artist || 'Connor Demo'),
+      };
+    })
+    .filter(Boolean);
+
+  return { id: base.id || 'demo_playlist', name: base.name || 'Предложенные автором', tracks: normalizedTracks };
+}
+
+function initDemoPlaylist() {
+  try {
+    const music = store.get('music') || {};
+    const playlists = Array.isArray(music.playlists) ? [...music.playlists] : [];
+    if (playlists.some((p) => String(p?.id) === 'demo_playlist')) return;
+
+    const demo = loadDemoPlaylistTemplate();
+    if (!Array.isArray(demo.tracks) || !demo.tracks.length) return;
+
+    playlists.push({
+      id: 'demo_playlist',
+      name: demo.name,
+      tracks: demo.tracks,
+    });
+    store.set('music.playlists', playlists);
+
+    const lib = Array.isArray(store.get('musicTracks')) ? store.get('musicTracks') : [];
+    const byPath = new Set(lib.map((t) => String(t?.path || '')));
+    for (const track of demo.tracks) {
+      if (byPath.has(track.path)) continue;
+      byPath.add(track.path);
+      lib.push(track);
+    }
+    store.set('musicTracks', lib);
+    // eslint-disable-next-line no-console
+    console.log('✅ Добавлен демо-плейлист "Предложенные автором"');
+  } catch {}
+}
+
 function registerIpc() {
   ipcMain.handle('app:getVersion', () => app.getVersion());
 
@@ -4521,6 +4897,7 @@ function registerIpc() {
       ttsVolume: Number.isFinite(Number(store.get('ttsVolume'))) ? Number(store.get('ttsVolume')) : 0.8,
       language: String(store.get('language') || 'ru').toLowerCase() === 'en' ? 'en' : 'ru',
       autoUpdateEnabled: store.get('autoUpdateEnabled') !== false,
+      voiceNotesFolder: String(store.get('voiceNotesFolder') || ''),
     };
   });
 
@@ -5008,6 +5385,7 @@ function registerIpc() {
       if (k === 'ttsRate') store.set('ttsRate', Math.max(0.5, Math.min(2.0, Number(v) || 1.0)));
       if (k === 'ttsVolume') store.set('ttsVolume', Math.max(0, Math.min(1, Number(v) || 0.8)));
       if (k === 'language') store.set('language', String(v).toLowerCase() === 'en' ? 'en' : 'ru');
+      if (k === 'voiceNotesFolder') store.set('voiceNotesFolder', String(v || '').trim() || DEFAULT_NOTES_DIR);
     }
 
     try {
@@ -5250,6 +5628,146 @@ function registerIpc() {
     }
   });
 
+  ipcMain.handle('dialog:selectFolder', async () => {
+    try {
+      const win = BrowserWindow.getFocusedWindow() || mainWindow;
+      const r = await dialog.showOpenDialog(win || undefined, { properties: ['openDirectory'] });
+      if (r.canceled || !r.filePaths?.[0]) return null;
+      return r.filePaths[0];
+    } catch (err) {
+      logSystemError('dialog:selectFolder failed', err, {});
+      return null;
+    }
+  });
+
+  ipcMain.handle('notes:start', async (_event, folderPath) => {
+    const raw = String(folderPath || '').trim();
+    if (!raw) return { success: false, error: 'Пустая папка' };
+    const resolved = path.isAbsolute(raw) ? path.normalize(raw) : resolveVoiceNotesFolderPath(raw);
+    if (!resolved) return { success: false, error: 'Некорректный путь' };
+    const ok = voiceNotesRecorder.start(resolved);
+    return ok ? { success: true } : { success: false, error: 'Не удалось начать запись' };
+  });
+
+  ipcMain.handle('notes:stop', async () => {
+    const filepath = voiceNotesRecorder.stop();
+    return { success: !!filepath, filepath: filepath || undefined };
+  });
+
+  ipcMain.handle('notes:cancel', async () => {
+    voiceNotesRecorder.cancel();
+    return { success: true };
+  });
+
+  ipcMain.handle('notes:getAll', async (_event, folderArg) => {
+    try {
+      const folder = String(folderArg || store.get('voiceNotesFolder') || '').trim();
+      if (!folder || !fs.existsSync(folder)) return [];
+      const entries = await fs.promises.readdir(folder, { withFileTypes: true });
+      const txtFiles = entries.filter((e) => e.isFile() && e.name.toLowerCase().endsWith('.txt'));
+      const items = await Promise.all(
+        txtFiles.map(async (e) => {
+          const p = path.join(folder, e.name);
+          const st = await fs.promises.stat(p);
+          return { name: e.name, path: p, date: st.mtime.toLocaleString('ru-RU'), mtime: st.mtimeMs };
+        }),
+      );
+      items.sort((a, b) => b.mtime - a.mtime);
+      return items.map(({ name, path: p, date }) => ({ name, path: p, date }));
+    } catch (err) {
+      logSystemError('notes:getAll failed', err, {});
+      return [];
+    }
+  });
+
+  ipcMain.handle('shell:openPath', async (_event, filePath) => {
+    try {
+      const msg = await shell.openPath(String(filePath || ''));
+      return { ok: !msg, error: msg || null };
+    } catch (err) {
+      return { ok: false, error: err?.message || String(err) };
+    }
+  });
+
+  ipcMain.handle('system:scan', async () => {
+    try {
+      const scanner = new SystemScanner();
+      const result = await scanner.saveToStore(store);
+      return { ok: true, ...result, lastScan: Date.now() };
+    } catch (err) {
+      logSystemError('system:scan failed', err, {});
+      return { ok: false, folders: [], games: [], lastScan: null };
+    }
+  });
+
+  ipcMain.handle('system:getScannedData', () => {
+    const fallback = { folders: [], games: [], shortcuts: [], lastScan: null };
+    const data = store.get('systemScan', fallback);
+    return data && typeof data === 'object' ? data : fallback;
+  });
+
+  ipcMain.handle('system:open-settings', async (_event, uri) => {
+    try {
+      const target = String(uri || 'ms-settings:').trim() || 'ms-settings:';
+      await shell.openExternal(target);
+      return { ok: true };
+    } catch (err) {
+      logSystemError('system:open-settings failed', err, { uri });
+      return { ok: false };
+    }
+  });
+
+  const openTargetHandler = async (targetPath) => {
+    try {
+      const t = String(targetPath || '').trim();
+      if (!t) return { success: false, error: 'empty_target' };
+      const lower = t.toLowerCase();
+      const looksPath = /^[a-z]:\\/i.test(t) || t.startsWith('\\\\');
+      const isExe = lower.endsWith('.exe');
+      const isSettingsUri = lower.startsWith('ms-settings:');
+      const isSteamUri = lower.startsWith('steam://');
+
+      if (isSettingsUri) {
+        await shell.openExternal(t);
+        return { success: true };
+      }
+      if (isSteamUri) {
+        await shell.openExternal(t);
+        return { success: true };
+      }
+
+      if (looksPath && !fs.existsSync(t)) {
+        return { success: false, error: 'path_not_found' };
+      }
+
+      // Task Manager: отдельный вызов через cmd/start обычно надежнее.
+      if (lower === 'taskmgr.exe' || lower.includes('taskmgr')) {
+        exec('start taskmgr.exe', { shell: 'cmd.exe', windowsHide: true });
+        return { success: true };
+      }
+
+      const cmdEscape = (v) => String(v).replace(/"/g, '\\"');
+
+      if (!looksPath) {
+        exec(`start ${cmdEscape(t)}`, { shell: 'cmd.exe', windowsHide: true });
+        return { success: true };
+      }
+
+      // Для путей (включая пробелы) запускаем строго через start "" "path".
+      const escapedPath = `"${cmdEscape(t)}"`;
+      exec(`start "" ${escapedPath}`, { shell: 'cmd.exe', windowsHide: true });
+      return { success: true };
+    } catch (err) {
+      logSystemError('system:open-target failed', err, { targetPath });
+      return { success: false, error: err?.message || 'open_failed' };
+    }
+  };
+
+  ipcMain.handle('system:open-target', async (_event, targetPath) => openTargetHandler(targetPath));
+
+  // Backward compatibility for older renderer bridge name.
+  ipcMain.handle('system:openTarget', async (_event, targetPath) => openTargetHandler(targetPath));
+
   ipcMain.handle('music:openPlayerWindow', () => {
     try {
       createMusicPlayerFullWindow();
@@ -5272,6 +5790,24 @@ function registerIpc() {
     const tracks = Array.isArray(activePlaylist.tracks) ? activePlaylist.tracks : [];
     const activeTrackIndex = tracks.length ? Math.max(0, Math.min(activeTrackIndexRaw, tracks.length - 1)) : 0;
 
+    const favPaths = Array.isArray(music.favorites) ? music.favorites.map(String) : [];
+    const libTracks = Array.isArray(store.get('musicTracks')) ? store.get('musicTracks') : [];
+    const favoritesResolved = [];
+    for (const pth of favPaths) {
+      if (!pth) continue;
+      let meta = null;
+      for (const pl of playlists) {
+        const t = (Array.isArray(pl.tracks) ? pl.tracks : []).find((x) => x && x.path === pth);
+        if (t) {
+          meta = t;
+          break;
+        }
+      }
+      if (!meta) meta = libTracks.find((x) => x && x.path === pth);
+      if (meta) favoritesResolved.push(meta);
+      else favoritesResolved.push({ path: pth, title: path.basename(pth) });
+    }
+
     return {
       volume,
       playlists,
@@ -5279,6 +5815,7 @@ function registerIpc() {
       activeTrackIndex,
       activePlaylistName: activePlaylist.name || 'Мои треки',
       tracks,
+      favorites: favoritesResolved,
     };
   });
 
@@ -5291,8 +5828,15 @@ function registerIpc() {
   });
 
   ipcMain.handle('music:setActiveTrack', (_event, index) => {
-    const i = Number(index);
-    if (!Number.isFinite(i)) return { ok: false, error: 'invalid_index' };
+    const raw = Number(index);
+    if (!Number.isFinite(raw)) return { ok: false, error: 'invalid_index' };
+    const music = store.get('music') || {};
+    const playlists = Array.isArray(music.playlists) ? music.playlists : [];
+    const activePlaylistId = music.activePlaylistId || (playlists[0]?.id || 'playlist_1');
+    const activePlaylist = playlists.find((p) => p?.id === activePlaylistId) || playlists[0];
+    const tracks = Array.isArray(activePlaylist?.tracks) ? activePlaylist.tracks : [];
+    const n = tracks.length;
+    const i = n ? Math.max(0, Math.min(Math.floor(raw), n - 1)) : 0;
     store.set('music.activeTrackIndex', i);
     return { ok: true, activeTrackIndex: i };
   });
@@ -5341,12 +5885,8 @@ function registerIpc() {
 
   // Music scan (MP3) + discovery list.
   ipcMain.handle('music:scan', async () => {
-    const userProfile = process.env.USERPROFILE || '';
-    const roots = [
-      userProfile ? path.join(userProfile, 'Music') : null,
-      userProfile ? path.join(userProfile, 'Downloads') : null,
-      'C:\\Music',
-    ].filter(Boolean);
+    const configured = Array.isArray(store.get('musicScanFolders')) ? store.get('musicScanFolders') : [DEFAULT_MUSIC_DIR];
+    const roots = configured.filter((p) => typeof p === 'string' && p.trim()).map((p) => p.trim());
 
     const discovered = await scanMp3FilesFromRoots(roots, { maxFiles: 5000 }).catch(() => []);
 
@@ -5368,6 +5908,112 @@ function registerIpc() {
 
   ipcMain.handle('music:getTracks', () => {
     return Array.isArray(store.get('musicTracks')) ? store.get('musicTracks') : [];
+  });
+
+  ipcMain.handle('music:searchLocal', (_event, query, limit) => {
+    const q = String(query || '').toLowerCase().trim();
+    if (!q) return [];
+    const lim = Math.max(1, Math.min(200, Number(limit) || 40));
+    const lib = Array.isArray(store.get('musicTracks')) ? store.get('musicTracks') : [];
+    return lib
+      .filter((t) => {
+        const title = String(t?.title || '').toLowerCase();
+        const p = String(t?.path || '').toLowerCase();
+        return title.includes(q) || p.includes(q);
+      })
+      .slice(0, lim);
+  });
+
+  ipcMain.handle('music:toggleFavorite', (_event, trackPath) => {
+    const p = String(trackPath || '').trim();
+    if (!p) return { ok: false, error: 'empty' };
+    const music = store.get('music') || {};
+    const fav = Array.isArray(music.favorites) ? [...music.favorites] : [];
+    const idx = fav.indexOf(p);
+    if (idx >= 0) fav.splice(idx, 1);
+    else fav.push(p);
+    store.set('music.favorites', fav);
+    try {
+      mainWindow?.webContents?.send('music:state-changed', { reason: 'favorites' });
+    } catch {}
+    try {
+      if (musicPlayerFullWindow && !musicPlayerFullWindow.isDestroyed()) {
+        musicPlayerFullWindow.webContents.send('music:state-changed', { reason: 'favorites' });
+      }
+    } catch {}
+    return { ok: true, favorites: fav };
+  });
+
+  ipcMain.handle('floating:show', () => {
+    try {
+      if (!connorFloatingWindow || connorFloatingWindow.isDestroyed()) createConnorFloatingWindow();
+      connorFloatingWindow?.show();
+      connorFloatingWindow?.focus();
+      connorFloatingWindow?.setAlwaysOnTop(true, 'screen-saver');
+      return { ok: true };
+    } catch (err) {
+      logSystemError('floating:show failed', err, {});
+      return { ok: false };
+    }
+  });
+
+  ipcMain.handle('floating:hide', () => {
+    try {
+      if (!connorFloatingWindow || connorFloatingWindow.isDestroyed()) return { ok: true };
+      connorFloatingWindow.hide();
+      return { ok: true };
+    } catch (err) {
+      logSystemError('floating:hide failed', err, {});
+      return { ok: false };
+    }
+  });
+
+  ipcMain.handle('time:showBrief', () => {
+    try {
+      const w = createTimeWindow();
+      if (!w || w.isDestroyed()) return { ok: false };
+      w.show();
+      w.focus();
+      w.setAlwaysOnTop(true, 'screen-saver');
+      const now = new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      w.webContents.send('time:update', { now });
+      if (timeWindowAutoHideTimer) clearTimeout(timeWindowAutoHideTimer);
+      timeWindowAutoHideTimer = setTimeout(() => {
+        try {
+          if (timeWindow && !timeWindow.isDestroyed()) timeWindow.hide();
+        } catch {}
+        timeWindowAutoHideTimer = null;
+      }, 5000);
+      return { ok: true };
+    } catch (err) {
+      logSystemError('time:showBrief failed', err, {});
+      return { ok: false };
+    }
+  });
+
+  ipcMain.handle('notesOverlay:show', () => {
+    try {
+      const w = createNotesOverlayWindow();
+      if (!w || w.isDestroyed()) return { ok: false };
+      w.show();
+      w.focus();
+      w.setAlwaysOnTop(true, 'screen-saver');
+      return { ok: true };
+    } catch (err) {
+      logSystemError('notesOverlay:show failed', err, {});
+      return { ok: false };
+    }
+  });
+
+  ipcMain.handle('notesOverlay:hide', () => {
+    try {
+      if (!notesOverlayWindow || notesOverlayWindow.isDestroyed()) return { ok: true };
+      notesOverlayWindow.hide();
+      return { ok: true };
+    } catch (err) {
+      logSystemError('notesOverlay:hide failed', err, {});
+      return { ok: false };
+    }
   });
 
   // Playlist CRUD.
@@ -5607,6 +6253,12 @@ function checkForUpdates(_manual = true) {
 }
 
 app.whenReady().then(() => {
+  try {
+    fs.mkdirSync(LOG_DIR, { recursive: true });
+    fs.mkdirSync(CACHE_DIR, { recursive: true });
+    fs.mkdirSync(String(store.get('voiceNotesFolder') || DEFAULT_NOTES_DIR), { recursive: true });
+  } catch {}
+  initDemoPlaylist();
   createMainWindow();
   createConnorFloatingWindow();
   // Создаём casinoWindow заранее (без показа), чтобы кнопка “Казино” работала стабильно.

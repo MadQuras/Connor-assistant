@@ -1,19 +1,19 @@
 :root {
-  --bg0: #0a0a1a;
-  --bg1: #050510;
-  --panel: rgba(10, 20, 30, 0.60);
-  --panel2: rgba(10, 20, 30, 0.40);
-  --border: rgba(0, 255, 255, 0.22);
-  --text: #eef5ff;
-  --muted: rgba(238, 245, 255, 0.62);
+  --bg0: var(--bg);
+  --bg1: color-mix(in srgb, var(--bg) 85%, black 15%);
+  --panel: color-mix(in srgb, var(--surface) 86%, transparent 14%);
+  --panel2: color-mix(in srgb, var(--surface-soft) 78%, transparent 22%);
+  --border: var(--border);
+  --text: var(--text);
+  --muted: var(--muted);
 
-  --cyan: #00ffff;
-  --magenta: #ff00ff;
-  --violet: #8a2eff;
-  --danger: #ff3b6a;
-  --good: #00ffa8;
+  --cyan: var(--accent);
+  --magenta: color-mix(in srgb, var(--accent) 62%, #7c3aed 38%);
+  --violet: color-mix(in srgb, var(--accent) 52%, #4f46e5 48%);
+  --danger: var(--danger);
+  --good: color-mix(in srgb, var(--accent) 72%, #22c55e 28%);
 
-  --radius: 18px;
+  --radius: var(--radius);
 }
 
 html,
@@ -56,6 +56,16 @@ body.theme-classic {
   transform: perspective(900px) rotateX(58deg) translateY(160px);
   transform-origin: center;
   animation: gridDrift 7.5s ease-in-out infinite alternate;
+}
+
+/* Visual unification: disable legacy cyberpunk layers */
+#bg-grid,
+#bg-glow,
+#particlesContainer,
+#cyber-noise,
+body::before,
+body::after {
+  display: none !important;
 }
 
 @keyframes gridDrift {
@@ -1440,6 +1450,32 @@ body {
   display: none !important;
 }
 
+/* Performance mode: disable legacy heavy layers and reduce expensive effects */
+body::before,
+body::after {
+  display: none !important;
+  content: none !important;
+}
+
+.view.hidden,
+.view.hidden * {
+  animation: none !important;
+  transition: none !important;
+}
+
+.card,
+.settings-card,
+.deepseek-card,
+.voice-card,
+.metric {
+  backdrop-filter: blur(12px) !important;
+}
+
+.voice-amp-bar {
+  will-change: transform, opacity, background-color;
+  transform: translateZ(0);
+}
+
 body::before,
 body::after {
   display: none !important;
@@ -2487,5 +2523,191 @@ body::after {
 
 #androidBootAnimation.boot-animation:not(.hidden) {
   display: grid !important;
+}
+
+/* ===== Голосовые конспекты ===== */
+.notes-hint {
+  margin: 0 0 16px;
+  font-size: 13px;
+  line-height: 1.45;
+  opacity: 0.88;
+}
+
+.notes-hint .mono {
+  font-family: ui-monospace, monospace;
+}
+
+.notes-folder {
+  margin-bottom: 20px;
+}
+
+.notes-folder > label {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 13px;
+  opacity: 0.9;
+}
+
+.notes-folder-row {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.notes-folder-row input {
+  flex: 1;
+  min-width: 200px;
+  background: rgba(20, 20, 35, 0.6);
+  border: 1px solid rgba(45, 212, 191, 0.2);
+  border-radius: 40px;
+  padding: 10px 16px;
+  color: #ededee;
+}
+
+.notes-recording {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.recording-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 20px;
+}
+
+.status-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #8b8b9e;
+}
+
+.status-dot.recording {
+  background: #ef4444;
+  animation: notes-pulse 1s infinite;
+}
+
+@keyframes notes-pulse {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.5;
+    transform: scale(1.2);
+  }
+}
+
+.notes-preview {
+  margin-top: 8px;
+  margin-bottom: 20px;
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 12px;
+  padding: 16px;
+  overflow: visible;
+}
+
+#notesPreviewContent {
+  max-height: 200px;
+  overflow-y: auto;
+  font-family: ui-monospace, monospace;
+  font-size: 12px;
+  white-space: pre-wrap;
+  line-height: 1.4;
+}
+
+.note-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.note-item:last-child {
+  border-bottom: none;
+}
+
+.note-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.note-name {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.note-date {
+  font-size: 12px;
+  opacity: 0.7;
+}
+
+.open-note {
+  flex-shrink: 0;
+}
+
+/* Scroll behavior fixes (release) */
+.settings-card {
+  max-height: calc(100vh - 180px);
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.reminders-list {
+  max-height: 260px;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.deepseek-messages {
+  max-height: 360px;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+#savedNotesList {
+  max-height: 260px;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+/* Phase 2 normalization: keep layout, unify visual tokens */
+.card {
+  background: color-mix(in srgb, var(--surface) 88%, transparent 12%) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: var(--radius) !important;
+}
+
+.neon-btn,
+.tab-btn,
+.hotkey-input,
+.deepseek-select,
+.deepseek-composer textarea,
+input[type='number'] {
+  background: color-mix(in srgb, var(--surface-soft) 86%, transparent 14%) !important;
+  border: 1px solid var(--border) !important;
+  color: var(--text) !important;
+  border-radius: var(--radius) !important;
+}
+
+.tab-btn.active,
+.neon-btn:hover,
+.tab-btn:hover {
+  border-color: color-mix(in srgb, var(--accent) 70%, white 30%) !important;
+  box-shadow: none !important;
 }
 

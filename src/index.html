@@ -4,6 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
     <title>Connor Assistant</title>
+    <link rel="stylesheet" href="./styles/theme.css" />
     <link rel="stylesheet" href="./styles/main.css" />
     <link
       rel="icon"
@@ -12,10 +13,6 @@
     />
   </head>
   <body>
-    <div id="cyber-noise" aria-hidden="true"></div>
-    <div id="bg-grid" aria-hidden="true"></div>
-    <div id="bg-glow" aria-hidden="true"></div>
-    <div id="particlesContainer" aria-hidden="true"></div>
     <div id="androidBootAnimation" class="boot-animation hidden" aria-hidden="true">
       <div class="boot-circle"></div>
       <div class="boot-text">RK800 SYSTEM BOOT</div>
@@ -58,8 +55,6 @@
 
           <div class="tabs">
             <button class="tab-btn" id="tabMain" type="button">Главная</button>
-            <button class="tab-btn" id="tabDeepseek" type="button">DeepSeek Chat</button>
-            <button class="tab-btn" id="tabMusic" type="button">Музыка</button>
             <button class="tab-btn" id="tabSettings" type="button">Настройки</button>
           </div>
         </div>
@@ -87,8 +82,6 @@
           <div class="section-title">Голосовой интерфейс</div>
           <div class="voice-wrap">
             <div class="voice-visual" id="voiceViz" data-state="off" aria-label="Визуализация прослушивания">
-              <div class="voice-center"></div>
-              <div class="voice-ring"></div>
               <div class="voice-amp" aria-hidden="true">
                 <span class="voice-amp-bar" style="--i:0"></span>
                 <span class="voice-amp-bar" style="--i:1"></span>
@@ -102,16 +95,6 @@
                 <span class="voice-amp-bar" style="--i:9"></span>
                 <span class="voice-amp-bar" style="--i:10"></span>
                 <span class="voice-amp-bar" style="--i:11"></span>
-              </div>
-              <div class="voice-dots">
-                <span class="voice-dot" style="--i: 0"></span>
-                <span class="voice-dot" style="--i: 1"></span>
-                <span class="voice-dot" style="--i: 2"></span>
-                <span class="voice-dot" style="--i: 3"></span>
-                <span class="voice-dot" style="--i: 4"></span>
-                <span class="voice-dot" style="--i: 5"></span>
-                <span class="voice-dot" style="--i: 6"></span>
-                <span class="voice-dot" style="--i: 7"></span>
               </div>
             </div>
             <div class="voice-meta">
@@ -236,6 +219,44 @@
         </section>
       </main>
 
+      <main id="notesView" class="view hidden">
+        <section class="card notes-card">
+          <div class="section-title">Голосовые конспекты</div>
+          <p class="notes-hint">
+            Говорите во время записи — строки попадут в файл за сегодня (<span class="mono">ДД.ММ.ГГГГ.txt</span>).
+            Команды: «Коннор, начни конспект в …», «сохрани конспект», «отмени конспект».
+          </p>
+
+          <div class="notes-folder">
+            <label for="notesFolder">Папка для конспектов</label>
+            <div class="notes-folder-row">
+              <input type="text" id="notesFolder" placeholder="МГКЭИТ/Английский/2 семестр или полный путь" />
+              <button id="selectNotesFolder" class="neon-btn secondary" type="button">Выбрать</button>
+            </div>
+          </div>
+
+          <div class="notes-recording">
+            <div class="recording-status" id="recordingStatus">
+              <span class="status-dot"></span>
+              <span id="recordingStatusText">Не записываю</span>
+            </div>
+            <button id="startNotesBtn" class="neon-btn" type="button">Начать запись</button>
+            <button id="stopNotesBtn" class="neon-btn" type="button" hidden>Остановить</button>
+            <button id="cancelNotesBtn" class="neon-btn danger" type="button" hidden>Отменить</button>
+          </div>
+
+          <div class="notes-preview" id="notesPreview" hidden>
+            <div class="section-title">Текущий конспект</div>
+            <div id="notesPreviewContent"></div>
+          </div>
+
+          <div class="notes-list">
+            <div class="section-title">Сохранённые конспекты</div>
+            <div id="savedNotesList"></div>
+          </div>
+        </section>
+      </main>
+
       <main id="deepseekView" class="view hidden">
         <section class="card deepseek-card">
           <div class="deepseek-toolbar">
@@ -331,6 +352,37 @@
                 <span class="btn-title">Запросить разрешение</span>
                 <span class="btn-sub">Микрофон</span>
               </button>
+            </div>
+          </div>
+
+          <div class="hotkeys-card" style="margin-top: 14px;">
+            <div class="hotkeys-title">Конспекты</div>
+            <label class="hotkey-row" style="margin-top: 10px;">
+              <span class="hotkey-label">Папка конспектов</span>
+              <input id="settingsNotesFolder" class="hotkey-input mono" type="text" placeholder="%USERPROFILE%/Documents/ConnorNotes" />
+            </label>
+            <div class="settings-actions" style="margin-top: 12px;">
+              <button class="neon-btn secondary" id="btnSelectNotesFolder" type="button">
+                <span class="btn-title">Выбрать папку</span>
+                <span class="btn-sub">Путь сохранения</span>
+              </button>
+              <button class="neon-btn secondary" id="btnSaveNotesFolder" type="button">
+                <span class="btn-title">Сохранить</span>
+                <span class="btn-sub">Для голосовых конспектов</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="hotkeys-card" style="margin-top: 14px;">
+            <div class="hotkeys-title">📁 Сканирование ПК</div>
+            <div class="settings-actions" style="margin-top: 12px;">
+              <button class="neon-btn secondary" id="btnScanPC" type="button">
+                <span class="btn-title">Сканировать</span>
+                <span class="btn-sub">Найти папки и игры</span>
+              </button>
+            </div>
+            <div id="scanStatus" class="settings-note-text" style="margin-top: 12px;">
+              ⚡ Статус: не сканировано
             </div>
           </div>
 
@@ -463,7 +515,7 @@
 
           <div class="settings-note">
             <div class="settings-note-title">Подсказка</div>
-            <div class="settings-note-text">Система обновляет CPU/RAM/диск/активное окно каждые 2 секунды.</div>
+            <div class="settings-note-text">Система обновляет CPU/RAM/диск/активное окно каждые 5 секунд.</div>
           </div>
 
           <div class="settings-actions">
