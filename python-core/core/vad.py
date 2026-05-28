@@ -1,0 +1,250 @@
+﻿from __future__ import annotations
+
+import queue
+import threading
+import time
+from typing import Callable, Optional
+
+import numpy as np
+
+from core import logger
+from core.constants import SAMPLE_RATE, VAD_CHUNK_MS
+
+CHUNK_SAMPLES = int(SAMPLE_RATE * VAD_CHUNK_MS / 1000)  # 512 @ 16 kHz / 32 ms
+
+# ─── Gain & thresholds ───────────────────────────────────────────────────────
+# Mic gain is applied in the audio callback BEFORE Silero sees the signal.
+# This boosts quiet microphones without changing the downstream interface.
+# Peak raw RMS observed: 0.011–0.035  →  after x4: 0.044–0.14
+_MIC_GAIN           = 4.0
+
+# Silero probability threshold (0–1). Lower = more sensitive.
+# After gain, speech probability rises significantly for real speech.
+_SILERO_THRESHOLD   = 0.12
+
+# Energy-based fallback (used when Silero is unavailable).
+# After x4 gain: ambient ~0.02, speech ~0.08+.
+# Threshold 0.035 (after gain) matches the agreed pipeline plan.
+_ENERGY_THRESHOLD   = 0.035
+
+# Debug: log peak RMS seen in N-second windows.
+_DBG_INTERVAL_SEC   = 5
+
+
+class SileroVAD:
+    """Silero VAD with 4× pre-gain and energy fallback."""
+
+    def __init__(self, threshold: float = _SILERO_THRESHOLD) -> None:
+        self.threshold        = threshold
+        self._model           = None
+        self._torch           = None
+        self._energy_fallback = False
+
+        self._queue:  queue.Queue[np.ndarray] = queue.Queue(maxsize=512)
+        self._running = False
+        self._stream  = None
+
+        self._dbg_last = time.time()
+        self._dbg_peak = 0.0
+
+    # ── Model loading ─────────────────────────────────────────────────────────
+
+    def _load_model(self) -> None:
+        if self._model is not None or self._energy_fallback:
+            return
+        try:
+            import torch
+            self._torch = torch
+            model, _ = torch.hub.load(
+                repo_or_dir="snakers4/silero-vad",
+                model="silero_vad",
+                force_reload=False,
+                trust_repo=True,
+            )
+            self._model = model
+            logger.log_system("Silero VAD загружен")
+        except Exception as exc:
+            self._energy_fallback = True
+            logger.log_system(f"Silero недоступен — energy fallback: {exc}")
+
+    # ── Audio stream ──────────────────────────────────────────────────────────
+
+    def _callback(self, indata, _frames, _time, status) -> None:
+        if status:
+            logger.log_error(f"VAD stream status: {status}")
+
+        # Store RAW audio — no gain applied here.
+        # Gain is applied only inside _speech_probability() for Silero/energy
+        # detection.  The collect_utterance buffer therefore holds clean audio
+        # which Whisper can transcribe without clipping distortion.
+        chunk = indata[:, 0].astype(np.float32)
+
+        try:
+            self._queue.put_nowait(chunk)
+        except queue.Full:
+            pass  # drop — processing is falling behind
+
+    def start_stream(self) -> None:
+        import sounddevice as sd
+        self._running = True
+        self._stream = sd.InputStream(
+            samplerate=SAMPLE_RATE,
+            channels=1,
+            dtype="float32",
+            blocksize=CHUNK_SAMPLES,
+            callback=self._callback,
+        )
+        self._stream.start()
+        logger.log_system(
+            f"Аудио поток открыт — {SAMPLE_RATE} Hz / {CHUNK_SAMPLES} samp "
+            f"(raw queue, VAD gain x{_MIC_GAIN} only)"
+        )
+
+    def stop_stream(self) -> None:
+        self._running = False
+        if self._stream is not None:
+            try:
+                self._stream.stop()
+                self._stream.close()
+            except Exception:
+                pass
+            self._stream = None
+
+    # ── Speech probability ────────────────────────────────────────────────────
+
+    def _speech_probability(self, chunk: np.ndarray) -> float:
+        # Amplify for detection only — Silero and energy threshold need a
+        # louder signal.  The original (raw) chunk is buffered for Whisper.
+        amplified = np.clip(chunk * _MIC_GAIN, -1.0, 1.0)
+        energy = float(np.sqrt(np.mean(np.square(amplified))))
+
+        # Rolling peak debug log every N seconds
+        self._dbg_peak = max(self._dbg_peak, energy)
+        now = time.time()
+        if now - self._dbg_last >= _DBG_INTERVAL_SEC:
+            mode = "energy-fb" if self._energy_fallback else "silero"
+            logger.log_system(
+                f"VAD alive — peak RMS {_DBG_INTERVAL_SEC}s: "
+                f"{self._dbg_peak:.4f} ({mode}, thr={self.threshold})"
+            )
+            self._dbg_peak = 0.0
+            self._dbg_last = now
+
+        # Energy-only fallback
+        if self._energy_fallback or self._model is None or self._torch is None:
+            return 1.0 if energy >= _ENERGY_THRESHOLD else 0.0
+
+        # Silero inference on amplified signal
+        try:
+            return float(
+                self._model(self._torch.from_numpy(amplified), SAMPLE_RATE).item()
+            )
+        except Exception as exc:
+            logger.log_error(f"Silero inference: {exc}")
+            self._energy_fallback = True
+            return 1.0 if energy >= _ENERGY_THRESHOLD else 0.0
+
+    # ── Utterance collection ──────────────────────────────────────────────────
+
+    def collect_utterance(
+        self,
+        max_silence_chunks: int = 20,
+        min_speech_chunks:  int = 2,
+        stop_event: Optional[threading.Event] = None,
+    ) -> np.ndarray:
+        """
+        Accumulate chunks until end of speech.
+        Starts when min_speech_chunks consecutive speech frames are detected.
+        Stops after max_silence_chunks consecutive silent frames post-speech.
+        """
+        buf:        list[np.ndarray] = []
+        started     = False
+        silence_cnt = 0
+        speech_cnt  = 0
+
+        while self._running:
+            if stop_event is not None and stop_event.is_set():
+                break
+            try:
+                chunk = self._queue.get(timeout=0.3)
+            except queue.Empty:
+                if started and silence_cnt >= max_silence_chunks:
+                    break
+                continue
+
+            prob     = self._speech_probability(chunk)
+            is_speech = prob >= self.threshold
+
+            if is_speech:
+                started     = True
+                silence_cnt = 0
+                speech_cnt += 1
+                buf.append(chunk)
+            elif started:
+                silence_cnt += 1
+                buf.append(chunk)
+                if silence_cnt >= max_silence_chunks and speech_cnt >= min_speech_chunks:
+                    break
+
+        return np.concatenate(buf) if buf else np.array([], dtype=np.float32)
+
+
+class VADListener:
+    """Background thread: listens forever, calls on_utterance for each detected phrase."""
+
+    def __init__(
+        self,
+        on_utterance: Callable[[np.ndarray], None],
+        threshold: float = _SILERO_THRESHOLD,
+        on_ready: Optional[Callable[[], None]] = None,
+    ) -> None:
+        self.on_utterance = on_utterance
+        self._on_ready    = on_ready
+        self.vad   = SileroVAD(threshold=threshold)
+        self._thread: Optional[threading.Thread] = None
+        self._stop  = threading.Event()
+
+    def _loop(self) -> None:
+        self.vad._load_model()
+        self.vad.start_stream()
+        # Signal that the mic is open and models are loaded — system is ready
+        if self._on_ready:
+            try:
+                self._on_ready()
+            except Exception:
+                pass
+
+        # Minimum utterance: 0.35 s, minimum RMS 0.015 (raw, pre-gain)
+        # Blocks very quiet noise bursts from reaching Whisper.
+        min_samples = int(SAMPLE_RATE * 0.35)
+        min_rms     = 0.015
+
+        while not self._stop.is_set():
+            audio = self.vad.collect_utterance(
+                max_silence_chunks=20,
+                min_speech_chunks=3,
+                stop_event=self._stop,
+            )
+            if len(audio) >= min_samples:
+                rms = float(np.sqrt(np.mean(np.square(audio))))
+                logger.log_system(
+                    f"VAD захватил {len(audio)/SAMPLE_RATE:.2f}s, RMS={rms:.4f}"
+                )
+                if rms < min_rms:
+                    logger.log_system(f"VAD пропуск — слишком тихо (RMS={rms:.4f} < {min_rms})")
+                    continue
+                self.on_utterance(audio)
+
+        self.vad.stop_stream()
+
+    def start(self) -> None:
+        self._stop.clear()
+        self._thread = threading.Thread(
+            target=self._loop, name="vad-listener", daemon=True
+        )
+        self._thread.start()
+
+    def stop(self) -> None:
+        self._stop.set()
+        if self._thread:
+            self._thread.join(timeout=4)

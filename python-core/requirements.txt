@@ -1,0 +1,29 @@
+# Connor RK800 — Python 3.11 dependencies
+# Install: pip install -r requirements.txt
+
+# ── Speech & AI ──────────────────────────────────────────────────
+faster-whisper>=1.2.0
+ctranslate2>=4.4.0
+torch>=2.0.0
+torchaudio>=2.0.0
+sounddevice>=0.4.6
+numpy>=1.24.0,<2.0.0
+
+# ── Google Gemini ────────────────────────────────────────────────
+google-genai>=1.0.0
+
+# ── UI overlay ───────────────────────────────────────────────────
+PyQt5>=5.15.9
+pygame>=2.5.0
+
+# ── System / Windows ─────────────────────────────────────────────
+pywin32>=306
+comtypes>=1.2.0
+pycaw>=20240210
+pyautogui>=0.9.54
+pygetwindow>=0.0.9
+pillow>=10.0.0
+pytesseract>=0.3.10
+
+# ── Utilities ────────────────────────────────────────────────────
+requests>=2.31.0

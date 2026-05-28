@@ -1,0 +1,10 @@
+/* design-tokens — Detroit RK800 (doc + UI-references/STYLE_GUIDE.md) */
+:root {
+  --cyan: #00b4d8;
+  --bg: #05050e;
+  --bg2: #07070f;
+  --bg3: #0a0a16;
+  --text: #e0f7ff;
+  --muted: rgba(0, 180, 216, 0.45);
+  --border: rgba(0, 180, 216, 0.16);
+}

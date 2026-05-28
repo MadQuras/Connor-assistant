@@ -1,0 +1,16 @@
+﻿from __future__ import annotations
+
+from typing import Protocol
+
+
+class MusicPlayer(Protocol):
+    def ensure_open(self) -> bool: ...
+    def play_pause(self) -> None: ...
+    def next_track(self) -> None: ...
+    def prev_track(self) -> None: ...
+    def search_and_play(self, query: str) -> bool: ...
+
+
+def get_player() -> MusicPlayer:
+    from core.music.lune import LuneMusicPlayer
+    return LuneMusicPlayer()

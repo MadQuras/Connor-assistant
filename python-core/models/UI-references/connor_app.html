@@ -1,0 +1,599 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>КОННОР RK800</title>
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@300;400;600;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --cyan:#00B4D8;--cyan2:rgba(0,180,216,0.18);--cyan3:rgba(0,180,216,0.08);
+  --cyan4:rgba(0,180,216,0.04);--bg:#05050E;--bg2:#07070F;--bg3:#0A0A16;
+  --text:#E0F7FF;--muted:rgba(0,180,216,0.45);--faint:rgba(0,180,216,0.12);
+  --border:rgba(0,180,216,0.16);--r:8px;--r-sm:6px;--r-lg:12px;
+}
+html,body{width:100%;height:100%;background:var(--bg);overflow:hidden;font-family:'Share Tech Mono',monospace;color:var(--text)}
+
+.grid-bg{position:fixed;inset:0;
+  background-image:linear-gradient(rgba(0,180,216,0.022) 1px,transparent 1px),linear-gradient(90deg,rgba(0,180,216,0.022) 1px,transparent 1px);
+  background-size:40px 40px;pointer-events:none;z-index:0}
+
+.scanline{position:fixed;left:0;right:0;height:1px;
+  background:linear-gradient(90deg,transparent,rgba(0,180,216,0.25),transparent);
+  animation:scan 7s linear infinite;pointer-events:none;z-index:0}
+@keyframes scan{0%{top:0}100%{top:100vh}}
+
+.corner{position:fixed;width:50px;height:50px;pointer-events:none;z-index:2}
+.corner::before,.corner::after{content:'';position:absolute;background:rgba(0,180,216,0.5)}
+.corner::before{width:100%;height:0.5px}.corner::after{width:0.5px;height:100%}
+.tl{top:20px;left:20px}.tr{top:20px;right:20px;transform:scaleX(-1)}
+.bl{bottom:20px;left:20px;transform:scaleY(-1)}.br{bottom:20px;right:20px;transform:scale(-1)}
+
+.app{position:fixed;inset:0;display:flex;flex-direction:column;z-index:1}
+
+/* TITLEBAR */
+.titlebar{
+  background:rgba(5,5,14,0.97);border-bottom:0.5px solid var(--border);
+  height:44px;padding:0 20px;
+  display:flex;align-items:center;justify-content:space-between;flex-shrink:0;
+}
+.tb-logo{display:flex;align-items:center;gap:10px}
+.tb-tri-wrap{position:relative;width:22px;height:22px;display:flex;align-items:center;justify-content:center}
+.tb-tri{width:0;height:0;border-left:9px solid transparent;border-right:9px solid transparent;border-bottom:16px solid var(--cyan);position:relative;z-index:1}
+.tb-tri-glow{position:absolute;inset:-4px;background:radial-gradient(circle,rgba(0,180,216,0.3),transparent 70%)}
+.tb-name{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:16px;letter-spacing:5px;color:var(--cyan)}
+.tb-ver{font-size:9px;color:rgba(0,180,216,0.3);letter-spacing:2px;margin-left:4px;align-self:flex-end;margin-bottom:2px}
+.tb-center{display:flex;align-items:center;gap:6px}
+.tb-chip{
+  font-size:9px;letter-spacing:2px;padding:5px 14px;border-radius:20px;cursor:default;
+  display:flex;align-items:center;gap:6px;
+}
+.tb-chip.active{border:0.5px solid var(--cyan);color:var(--cyan);background:rgba(0,180,216,0.06)}
+.tb-chip.standby{border:0.5px solid rgba(0,180,216,0.2);color:rgba(0,180,216,0.3)}
+.tb-chip-dot{width:5px;height:5px;border-radius:50%;background:var(--cyan);animation:pulse 2s ease-in-out infinite;flex-shrink:0}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.3}}
+.tb-right{display:flex;align-items:center;gap:14px}
+.tb-clock{font-size:12px;color:var(--muted);letter-spacing:2px}
+.tb-id{font-size:9px;color:rgba(0,180,216,0.2);letter-spacing:1px}
+.winbtns{display:flex;gap:6px}
+.wbtn{
+  width:13px;height:13px;border-radius:50%;
+  border:0.5px solid rgba(255,255,255,0.15);
+  background:rgba(255,255,255,0.05);cursor:pointer;transition:all 0.2s;
+  display:flex;align-items:center;justify-content:center;font-size:7px;color:transparent;
+}
+.wbtn:hover{color:rgba(0,0,0,0.6)}
+.wbtn.min:hover{background:#FFB347;border-color:#FFB347}
+.wbtn.max:hover{background:#06D6A0;border-color:#06D6A0}
+.wbtn.cls:hover{background:#FF4D6D;border-color:#FF4D6D}
+
+/* TABS */
+.tabs{
+  background:var(--bg2);border-bottom:0.5px solid var(--border);
+  height:40px;padding:0 20px;
+  display:flex;align-items:flex-end;gap:3px;flex-shrink:0;
+}
+.tab{
+  padding:0 20px;height:34px;display:flex;align-items:center;gap:8px;
+  font-size:10px;letter-spacing:2px;color:rgba(0,180,216,0.35);
+  cursor:pointer;transition:all 0.2s;
+  border-radius:var(--r-sm) var(--r-sm) 0 0;
+  border:0.5px solid transparent;position:relative;
+}
+.tab:hover{color:rgba(0,180,216,0.6);background:rgba(0,180,216,0.03)}
+.tab.active{color:var(--cyan);background:var(--bg3);border-color:var(--border);}
+.tab.active::after{content:'';position:absolute;bottom:-1px;left:0;right:0;height:1px;background:var(--bg3)}
+.tab-dot{width:4px;height:4px;border-radius:50%;background:currentColor}
+
+/* BODY */
+.body{flex:1;display:flex;overflow:hidden}
+
+/* LEFT PANEL */
+.left-panel{
+  width:215px;flex-shrink:0;background:rgba(4,4,12,0.97);
+  border-right:1px solid var(--cyan);
+  display:flex;flex-direction:column;position:relative;overflow:hidden;
+}
+.lp-scan{position:absolute;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,rgba(0,180,216,0.4),transparent);animation:scan 6s linear infinite;pointer-events:none}
+.lp-top{padding:14px 14px 12px;border-bottom:0.5px solid var(--faint)}
+.lp-tri-row{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.lp-tri{width:0;height:0;border-left:8px solid transparent;border-right:8px solid transparent;border-bottom:14px solid var(--cyan);flex-shrink:0}
+.lp-name{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:16px;letter-spacing:4px;color:var(--cyan)}
+.lp-rk{font-size:8px;color:rgba(0,180,216,0.3);letter-spacing:2px}
+.lp-status{display:flex;align-items:center;gap:8px;padding:8px 14px;border-bottom:0.5px solid var(--faint)}
+.lp-dot{width:6px;height:6px;border-radius:50%;background:var(--cyan);animation:pulse 2s ease-in-out infinite;flex-shrink:0}
+.lp-status-txt{font-size:9px;color:var(--cyan);letter-spacing:2px}
+.lp-status-time{font-size:9px;color:rgba(0,180,216,0.3);letter-spacing:1px;margin-left:auto}
+
+/* TIPS */
+.lp-tips{flex:1;padding:14px;display:flex;flex-direction:column;gap:0;overflow:hidden;position:relative}
+.lp-tip-label{font-size:8px;color:rgba(0,180,216,0.3);letter-spacing:2px;margin-bottom:12px}
+.tip-slot{min-height:120px;position:relative}
+.tip-bubble{
+  background:rgba(0,180,216,0.05);
+  border:0.5px solid rgba(0,180,216,0.2);
+  border-radius:0 var(--r) var(--r) var(--r);
+  padding:12px;position:absolute;top:0;left:0;right:0;
+  opacity:0;transform:translateY(8px);
+  transition:opacity 0.5s ease,transform 0.5s ease;
+  pointer-events:none;
+}
+.tip-bubble.visible{opacity:1;transform:translateY(0);pointer-events:auto}
+.tip-bubble::before{
+  content:'';position:absolute;top:-6px;left:0;
+  width:0;height:0;
+  border-right:6px solid rgba(0,180,216,0.2);
+  border-top:6px solid transparent;
+}
+.tip-tag{font-size:8px;color:rgba(0,180,216,0.5);letter-spacing:2px;margin-bottom:6px}
+.tip-text{font-size:11px;color:rgba(255,255,255,0.6);line-height:1.75}
+.tip-cursor{display:inline-block;width:7px;height:12px;background:var(--cyan);vertical-align:middle;margin-left:2px;animation:blink 1s step-end infinite}
+@keyframes blink{50%{opacity:0}}
+.tip-progress{display:flex;gap:4px;margin-top:14px}
+.tip-pip{width:6px;height:6px;border-radius:50%;background:rgba(0,180,216,0.15);border:0.5px solid rgba(0,180,216,0.2);transition:all 0.3s;flex-shrink:0}
+.tip-pip.active{background:var(--cyan);border-color:var(--cyan)}
+
+.lp-footer{padding:12px 14px;border-top:0.5px solid var(--faint);margin-top:auto}
+.lp-footer-txt{font-size:8px;color:rgba(0,180,216,0.18);letter-spacing:1px;line-height:2}
+
+/* CONTENT PAGES */
+.page{flex:1;overflow-y:auto;padding:22px;display:none;flex-direction:column;gap:20px}
+.page.active{display:flex}
+
+.sec-hd{display:flex;align-items:center;gap:12px;margin-bottom:14px}
+.sec-title{font-size:9px;color:var(--muted);letter-spacing:3px;white-space:nowrap}
+.sec-line{flex:1;height:0.5px;background:linear-gradient(90deg,var(--border),transparent)}
+.sec-badge{font-size:8px;color:rgba(0,180,216,0.4);letter-spacing:1px;border:0.5px solid var(--faint);padding:3px 10px;border-radius:20px}
+
+/* STAT CARDS */
+.stat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+.stat-card{
+  background:var(--bg3);border:0.5px solid var(--border);border-radius:var(--r-lg);
+  padding:14px 12px;position:relative;overflow:hidden;cursor:default;transition:border-color 0.2s,transform 0.2s;
+}
+.stat-card:hover{border-color:rgba(0,180,216,0.35);transform:translateY(-1px)}
+.stat-card::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,var(--cyan),transparent);opacity:0.4}
+.stat-label{font-size:8px;color:rgba(0,180,216,0.4);letter-spacing:2px;margin-bottom:8px}
+.stat-value{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:28px;color:var(--cyan);line-height:1}
+.stat-sub{font-size:9px;color:rgba(255,255,255,0.25);margin-top:4px}
+.stat-corner{position:absolute;bottom:8px;right:10px;font-size:8px;color:rgba(0,180,216,0.12);letter-spacing:1px}
+
+/* WAVE */
+.wave-card{background:var(--bg3);border:0.5px solid var(--border);border-radius:var(--r-lg);padding:16px 16px 12px}
+.wave-hd{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
+.wave-status{display:flex;align-items:center;gap:6px;font-size:9px;color:var(--cyan);letter-spacing:2px}
+.wave-dot{width:5px;height:5px;border-radius:50%;background:var(--cyan);animation:pulse 1.5s ease-in-out infinite}
+.wave-canvas{display:flex;align-items:center;gap:3px;height:52px}
+.wb{width:3px;border-radius:2px;background:var(--cyan);animation:wv 1.4s ease-in-out infinite}
+@keyframes wv{0%,100%{height:4px;opacity:0.15}50%{height:100%;opacity:0.7}}
+
+/* CMD LIST */
+.cmd-list{display:flex;flex-direction:column;gap:5px}
+.cmd-item{
+  display:flex;align-items:center;gap:10px;
+  padding:11px 14px;
+  background:var(--bg3);border:0.5px solid var(--border);border-radius:var(--r);
+  cursor:default;transition:all 0.2s;position:relative;overflow:hidden;
+}
+.cmd-item::before{content:'';position:absolute;left:0;top:0;bottom:0;width:2px;background:var(--cyan);opacity:0;transition:opacity 0.2s;border-radius:2px 0 0 2px}
+.cmd-item:hover{border-color:rgba(0,180,216,0.3);background:rgba(10,10,22,0.9)}
+.cmd-item:hover::before{opacity:1}
+.cmd-phrase{font-size:11px;color:var(--cyan);min-width:150px;letter-spacing:0.5px}
+.cmd-sep{color:rgba(0,180,216,0.2);font-size:12px}
+.cmd-desc{font-size:11px;color:rgba(255,255,255,0.35);flex:1}
+.cmd-audio{font-size:8px;color:rgba(0,180,216,0.25);letter-spacing:1px;border:0.5px solid rgba(0,180,216,0.12);padding:3px 8px;border-radius:20px}
+.cmd-ind{width:6px;height:6px;border-radius:50%;flex-shrink:0}
+.cmd-ind.on{background:var(--cyan);box-shadow:0 0 6px rgba(0,180,216,0.5)}
+.cmd-ind.off{background:rgba(255,255,255,0.08);border:0.5px solid rgba(255,255,255,0.1)}
+
+/* BOTTOM BAR */
+.bottom-bar{
+  background:rgba(5,5,14,0.98);border-top:1px solid rgba(0,180,216,0.22);
+  padding:10px 20px;display:flex;align-items:center;gap:16px;flex-shrink:0;
+}
+.np-cover{
+  width:38px;height:38px;border:0.5px solid var(--border);border-radius:var(--r-sm);
+  background:var(--bg3);display:flex;align-items:center;justify-content:center;
+  flex-shrink:0;position:relative;overflow:hidden;
+}
+.np-cover::after{content:'';position:absolute;inset:0;background:linear-gradient(135deg,rgba(0,180,216,0.1),transparent)}
+.np-tri{width:0;height:0;border-left:10px solid transparent;border-right:10px solid transparent;border-bottom:17px solid rgba(0,180,216,0.35)}
+.np-info{display:flex;flex-direction:column;gap:2px}
+.np-badge{font-size:8px;color:rgba(0,180,216,0.35);letter-spacing:2px}
+.np-track{font-size:12px;color:var(--text)}
+.np-artist{font-size:10px;color:var(--muted)}
+.np-lune{font-size:8px;color:rgba(0,180,216,0.2);letter-spacing:1px;margin-top:1px}
+.np-wave{flex:1;display:flex;align-items:center;gap:2px;height:28px;max-width:120px}
+.np-bar{width:2px;border-radius:1px;background:rgba(0,180,216,0.3);animation:wv 1.2s ease-in-out infinite}
+.bb-sep{width:0.5px;height:30px;background:var(--faint)}
+.mic-wrap{display:flex;align-items:center;gap:8px}
+.mic-ring{
+  width:28px;height:28px;border-radius:50%;border:1px solid var(--cyan);
+  display:flex;align-items:center;justify-content:center;position:relative;
+}
+.mic-ring::before{content:'';position:absolute;inset:-4px;border-radius:50%;border:0.5px solid rgba(0,180,216,0.2);animation:ringpulse 2s ease-in-out infinite}
+@keyframes ringpulse{0%,100%{transform:scale(1);opacity:0.5}50%{transform:scale(1.2);opacity:0}}
+.mic-dot2{width:8px;height:8px;border-radius:50%;background:var(--cyan);animation:pulse 2s ease-in-out infinite}
+.mic-txt{font-size:9px;color:var(--cyan);letter-spacing:2px}
+.bb-right{margin-left:auto;text-align:right}
+.bb-model{font-size:8px;color:rgba(0,180,216,0.2);letter-spacing:1px;line-height:2}
+
+/* SETTINGS */
+.s-section{display:flex;flex-direction:column;gap:8px}
+.s-row{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:13px 16px;background:var(--bg3);border:0.5px solid var(--border);
+  border-radius:var(--r);transition:border-color 0.2s;position:relative;overflow:hidden;
+}
+.s-row::before{content:'';position:absolute;left:0;top:0;bottom:0;width:2px;background:var(--cyan);opacity:0;transition:opacity 0.2s;border-radius:2px 0 0 2px}
+.s-row:hover{border-color:rgba(0,180,216,0.3)}.s-row:hover::before{opacity:1}
+.s-left{display:flex;flex-direction:column;gap:3px}
+.s-title{font-size:12px;color:rgba(255,255,255,0.7)}
+.s-desc{font-size:9px;color:rgba(255,255,255,0.28);letter-spacing:0.5px}
+.colors-row{display:flex;gap:8px;flex-wrap:wrap}
+.c-chip{width:30px;height:30px;border-radius:50%;cursor:pointer;border:2px solid transparent;transition:all 0.2s;position:relative;display:flex;align-items:center;justify-content:center}
+.c-chip:hover{transform:scale(1.12)}.c-chip.sel{border-color:rgba(255,255,255,0.85)}
+.c-chip.sel::after{content:'';position:absolute;width:7px;height:7px;border-radius:50%;background:white}
+.sl-wrap{display:flex;align-items:center;gap:10px}
+.sl{-webkit-appearance:none;appearance:none;width:140px;height:2px;border-radius:1px;background:rgba(0,180,216,0.12);outline:none;cursor:pointer}
+.sl::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;border-radius:50%;background:var(--cyan);cursor:pointer;box-shadow:0 0 8px rgba(0,180,216,0.6)}
+.sl-val{font-size:10px;color:var(--cyan);min-width:36px;text-align:right}
+.tog{width:38px;height:20px;border-radius:20px;background:rgba(0,180,216,0.1);border:0.5px solid var(--border);position:relative;cursor:pointer;transition:background 0.2s;flex-shrink:0}
+.tog.on{background:var(--cyan);border-color:var(--cyan)}
+.tog::after{content:'';position:absolute;width:14px;height:14px;border-radius:50%;background:white;top:2px;left:3px;transition:left 0.2s;box-shadow:0 1px 3px rgba(0,0,0,0.3)}
+.tog.on::after{left:21px}
+.s-sel{background:var(--bg2);border:0.5px solid var(--border);color:var(--text);font-family:'Share Tech Mono',monospace;font-size:10px;padding:7px 12px;border-radius:var(--r-sm);letter-spacing:1px;outline:none;cursor:pointer;min-width:150px}
+.s-sel:focus{border-color:var(--cyan)}
+.info-grid{display:flex;flex-direction:column;gap:5px}
+.info-r{display:flex;justify-content:space-between;padding:9px 14px;background:var(--bg3);border:0.5px solid var(--border);border-radius:var(--r-sm);font-size:10px}
+.info-k{color:rgba(255,255,255,0.3)}.info-v{color:var(--cyan)}
+.save-btn{
+  font-family:'Share Tech Mono',monospace;font-size:10px;letter-spacing:3px;
+  color:var(--bg);background:var(--cyan);border:none;padding:12px 28px;
+  border-radius:20px;cursor:pointer;transition:all 0.2s;align-self:flex-start;
+}
+.save-btn:hover{background:#00C8EF;transform:translateY(-1px)}
+.save-btn:active{transform:scale(0.97)}
+.scan-btn{
+  font-family:'Share Tech Mono',monospace;font-size:9px;letter-spacing:2px;
+  color:var(--cyan);background:transparent;border:0.5px solid var(--border);
+  padding:5px 14px;border-radius:20px;cursor:pointer;transition:all 0.2s;white-space:nowrap;
+}
+.scan-btn:hover{border-color:var(--cyan);background:var(--cyan3)}
+</style>
+</head>
+<body>
+<div class="grid-bg"></div>
+<div class="scanline"></div>
+<div class="corner tl"></div><div class="corner tr"></div>
+<div class="corner bl"></div><div class="corner br"></div>
+
+<div class="app">
+  <div class="titlebar">
+    <div class="tb-logo">
+      <div class="tb-tri-wrap"><div class="tb-tri-glow"></div><div class="tb-tri"></div></div>
+      <div class="tb-name">КОННОР</div>
+      <div class="tb-ver">RK800</div>
+    </div>
+    <div class="tb-center">
+      <div class="tb-chip active"><span class="tb-chip-dot"></span>АКТИВЕН</div>
+      <div class="tb-chip standby">STANDBY</div>
+    </div>
+    <div class="tb-right">
+      <div class="tb-clock" id="clock">00:00:00</div>
+      <div class="tb-id">#313 248 317</div>
+      <div class="winbtns">
+        <div class="wbtn min">─</div>
+        <div class="wbtn max">□</div>
+        <div class="wbtn cls">✕</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="tabs">
+    <div class="tab active" onclick="switchTab('home',this)"><div class="tab-dot"></div>ГЛАВНАЯ</div>
+    <div class="tab" onclick="switchTab('commands',this)"><div class="tab-dot"></div>КОМАНДЫ</div>
+    <div class="tab" onclick="switchTab('memory',this)"><div class="tab-dot"></div>ПАМЯТЬ</div>
+    <div class="tab" onclick="switchTab('settings',this)"><div class="tab-dot"></div>НАСТРОЙКИ</div>
+  </div>
+
+  <div class="body">
+
+    <!-- LEFT PANEL -->
+    <div class="left-panel">
+      <div class="lp-scan"></div>
+      <div class="lp-top">
+        <div class="lp-tri-row">
+          <div class="lp-tri"></div>
+          <div><div class="lp-name">КОННОР</div><div class="lp-rk">CYBERLIFE · RK800</div></div>
+        </div>
+      </div>
+      <div class="lp-status">
+        <div class="lp-dot"></div>
+        <div class="lp-status-txt">АКТИВЕН</div>
+        <div class="lp-status-time" id="lpTime">00:00</div>
+      </div>
+      <div class="lp-tips">
+        <div class="lp-tip-label">СОВЕТЫ КОННОРА</div>
+        <div class="tip-slot">
+          <div class="tip-bubble" id="tipBubble">
+            <div class="tip-tag" id="tipTag">ЗАГРУЗКА</div>
+            <div class="tip-text" id="tipText"><span class="tip-cursor"></span></div>
+          </div>
+        </div>
+        <div class="tip-progress" id="tipProgress"></div>
+      </div>
+      <div class="lp-footer">
+        <div class="lp-footer-txt">CYBERLIFE SYSTEMS<br>ANDROID DIVISION<br>BUILD 001 · 2026</div>
+      </div>
+    </div>
+
+    <!-- HOME -->
+    <div class="page active" id="page-home">
+      <div>
+        <div class="sec-hd"><div class="sec-title">СТАТУС СИСТЕМЫ</div><div class="sec-line"></div><div class="sec-badge">LIVE</div></div>
+        <div class="stat-grid">
+          <div class="stat-card"><div class="stat-label">ПРИЛОЖЕНИЯ</div><div class="stat-value">12</div><div class="stat-sub">в кэше памяти</div><div class="stat-corner">APPS</div></div>
+          <div class="stat-card"><div class="stat-label">ИГРЫ</div><div class="stat-value">4</div><div class="stat-sub">обнаружено</div><div class="stat-corner">GAMES</div></div>
+          <div class="stat-card"><div class="stat-label">КОМАНДЫ</div><div class="stat-value">27</div><div class="stat-sub">выполнено сегодня</div><div class="stat-corner">EXEC</div></div>
+          <div class="stat-card"><div class="stat-label">СКАНИРОВАНИЕ</div><div class="stat-value">0д</div><div class="stat-sub">назад</div><div class="stat-corner">SCAN</div></div>
+        </div>
+      </div>
+      <div class="wave-card">
+        <div class="wave-hd">
+          <div class="wave-status"><div class="wave-dot"></div>АУДИО ПОТОК</div>
+          <div style="font-size:9px;color:rgba(0,180,216,0.3);letter-spacing:1px">faster-whisper · CPU</div>
+        </div>
+        <div class="wave-canvas" id="waveMain"></div>
+      </div>
+      <div>
+        <div class="sec-hd"><div class="sec-title">БЫСТРЫЕ КОМАНДЫ</div><div class="sec-line"></div></div>
+        <div class="cmd-list">
+          <div class="cmd-item"><div class="cmd-phrase">открой [приложение]</div><div class="cmd-sep">→</div><div class="cmd-desc">запуск из кэша</div><div class="cmd-audio">audio_03–05</div><div class="cmd-ind on"></div></div>
+          <div class="cmd-item"><div class="cmd-phrase">включи музыку</div><div class="cmd-sep">→</div><div class="cmd-desc">запуск Lune</div><div class="cmd-audio">audio_21–23</div><div class="cmd-ind on"></div></div>
+          <div class="cmd-item"><div class="cmd-phrase">найди [запрос]</div><div class="cmd-sep">→</div><div class="cmd-desc">браузер + поиск</div><div class="cmd-audio">audio_14–16</div><div class="cmd-ind on"></div></div>
+          <div class="cmd-item"><div class="cmd-phrase">какая погода</div><div class="cmd-sep">→</div><div class="cmd-desc">данные API</div><div class="cmd-audio">audio_12–13</div><div class="cmd-ind on"></div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- COMMANDS -->
+    <div class="page" id="page-commands">
+      <div>
+        <div class="sec-hd"><div class="sec-title">ВСЕ КОМАНДЫ</div><div class="sec-line"></div><div class="sec-badge">8 АКТИВНЫХ</div></div>
+        <div class="cmd-list">
+          <div class="cmd-item"><div class="cmd-phrase">открой [приложение]</div><div class="cmd-sep">→</div><div class="cmd-desc">запуск из memory.json</div><div class="cmd-audio">audio_03–05</div><div class="cmd-ind on"></div></div>
+          <div class="cmd-item"><div class="cmd-phrase">включи музыку</div><div class="cmd-sep">→</div><div class="cmd-desc">запуск Lune плеера</div><div class="cmd-audio">audio_21–23</div><div class="cmd-ind on"></div></div>
+          <div class="cmd-item"><div class="cmd-phrase">следующий трек</div><div class="cmd-sep">→</div><div class="cmd-desc">pyautogui медиаклавиша</div><div class="cmd-audio">audio_32</div><div class="cmd-ind on"></div></div>
+          <div class="cmd-item"><div class="cmd-phrase">найди [запрос]</div><div class="cmd-sep">→</div><div class="cmd-desc">поиск в браузере</div><div class="cmd-audio">audio_14–16</div><div class="cmd-ind on"></div></div>
+          <div class="cmd-item"><div class="cmd-phrase">какая погода</div><div class="cmd-sep">→</div><div class="cmd-desc">данные погоды API</div><div class="cmd-audio">audio_12–13</div><div class="cmd-ind on"></div></div>
+          <div class="cmd-item"><div class="cmd-phrase">выключи компьютер</div><div class="cmd-sep">→</div><div class="cmd-desc">subprocess shutdown</div><div class="cmd-audio">audio_19–20</div><div class="cmd-ind on"></div></div>
+          <div class="cmd-item"><div class="cmd-phrase">что по планам</div><div class="cmd-sep">→</div><div class="cmd-desc">напоминания</div><div class="cmd-audio">audio_09–11</div><div class="cmd-ind off"></div></div>
+          <div class="cmd-item"><div class="cmd-phrase">диагностика</div><div class="cmd-sep">→</div><div class="cmd-desc">повторное сканирование</div><div class="cmd-audio">audio_25–26</div><div class="cmd-ind on"></div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- MEMORY -->
+    <div class="page" id="page-memory">
+      <div>
+        <div class="sec-hd"><div class="sec-title">КЭШИРОВАННЫЕ ПРИЛОЖЕНИЯ</div><div class="sec-line"></div><button class="scan-btn" onclick="this.textContent='СКАНИРОВАНИЕ...';setTimeout(()=>this.textContent='↺ ОБНОВИТЬ КЭШ',2000)">↺ ОБНОВИТЬ КЭШ</button></div>
+        <div class="info-grid">
+          <div class="info-r"><div class="info-k">chrome.exe</div><div class="info-v">C:\Program Files\Google\Chrome\...</div></div>
+          <div class="info-r"><div class="info-k">steam.exe</div><div class="info-v">C:\Program Files (x86)\Steam\...</div></div>
+          <div class="info-r"><div class="info-k">cs2.exe</div><div class="info-v">C:\...steamapps\common\cs2\...</div></div>
+          <div class="info-r"><div class="info-k">code.exe</div><div class="info-v">C:\Users\...\AppData\Local\...</div></div>
+          <div class="info-r"><div class="info-k">calculator.exe</div><div class="info-v">C:\Windows\System32\...</div></div>
+        </div>
+      </div>
+      <div>
+        <div class="sec-hd"><div class="sec-title">МУЗЫКА СЕГОДНЯ</div><div class="sec-line"></div><div style="font-size:8px;color:rgba(0,180,216,0.25);letter-spacing:1px;border:0.5px solid var(--faint);padding:3px 10px;border-radius:20px">LUNE · ПОДКЛЮЧЕНИЕ</div></div>
+        <div class="info-grid">
+          <div class="info-r"><div class="info-k">01</div><div class="info-v">Golden Brown — The Stranglers</div></div>
+          <div class="info-r"><div class="info-k">02</div><div class="info-v">— ожидание данных Lune —</div></div>
+        </div>
+      </div>
+      <div>
+        <div class="sec-hd"><div class="sec-title">ПАРАМЕТРЫ ПАМЯТИ</div><div class="sec-line"></div></div>
+        <div class="info-grid">
+          <div class="info-r"><div class="info-k">ПОСЛЕДНЕЕ СКАНИРОВАНИЕ</div><div class="info-v">25.05.2026</div></div>
+          <div class="info-r"><div class="info-k">СЛЕДУЮЩЕЕ СКАНИРОВАНИЕ</div><div class="info-v">01.06.2026</div></div>
+          <div class="info-r"><div class="info-k">ФАЙЛ ПАМЯТИ</div><div class="info-v">models/memory.json</div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SETTINGS -->
+    <div class="page" id="page-settings">
+      <div class="s-section">
+        <div class="sec-hd"><div class="sec-title">ВНЕШНИЙ ВИД</div><div class="sec-line"></div></div>
+        <div class="s-row">
+          <div class="s-left"><div class="s-title">Акцентный цвет</div><div class="s-desc">Цвет волны, интерфейса и подсветки</div></div>
+          <div class="colors-row" id="colorGrid"></div>
+        </div>
+        <div class="s-row">
+          <div class="s-left"><div class="s-title">Прозрачность overlay</div><div class="s-desc">Прозрачность левой панели</div></div>
+          <div class="sl-wrap"><input type="range" class="sl" min="30" max="100" value="75" oninput="document.getElementById('ov').textContent=this.value+'%'"><div class="sl-val" id="ov">75%</div></div>
+        </div>
+        <div class="s-row">
+          <div class="s-left"><div class="s-title">Скорость печатной машинки</div><div class="s-desc">Задержка появления текста (мс/символ)</div></div>
+          <div class="sl-wrap"><input type="range" class="sl" min="10" max="80" value="30" oninput="document.getElementById('tv').textContent=this.value+'мс'"><div class="sl-val" id="tv">30мс</div></div>
+        </div>
+      </div>
+      <div class="s-section">
+        <div class="sec-hd"><div class="sec-title">ГОЛОС И STT</div><div class="sec-line"></div></div>
+        <div class="s-row">
+          <div class="s-left"><div class="s-title">Громкость</div><div class="s-desc">Уровень воспроизведения аудио ответов</div></div>
+          <div class="sl-wrap"><input type="range" class="sl" min="0" max="100" value="80" oninput="document.getElementById('vv').textContent=this.value+'%'"><div class="sl-val" id="vv">80%</div></div>
+        </div>
+        <div class="s-row">
+          <div class="s-left"><div class="s-title">Таймаут команды</div><div class="s-desc">Секунды ожидания после активации</div></div>
+          <div class="sl-wrap"><input type="range" class="sl" min="5" max="30" value="15" oninput="document.getElementById('tov').textContent=this.value+'с'"><div class="sl-val" id="tov">15с</div></div>
+        </div>
+        <div class="s-row">
+          <div class="s-left"><div class="s-title">Модель Whisper</div><div class="s-desc">Точность vs скорость распознавания</div></div>
+          <select class="s-sel"><option>tiny (быстро)</option><option selected>base (баланс)</option><option>small (точнее)</option></select>
+        </div>
+      </div>
+      <div class="s-section">
+        <div class="sec-hd"><div class="sec-title">СИСТЕМА</div><div class="sec-line"></div></div>
+        <div class="s-row"><div class="s-left"><div class="s-title">Автозапуск с Windows</div><div class="s-desc">Запускать Коннора при входе в систему</div></div><div class="tog on" onclick="this.classList.toggle('on')"></div></div>
+        <div class="s-row"><div class="s-left"><div class="s-title">OCR контекст экрана</div><div class="s-desc">Читать содержимое активных окон</div></div><div class="tog on" onclick="this.classList.toggle('on')"></div></div>
+        <div class="s-row"><div class="s-left"><div class="s-title">Автообновление кэша</div><div class="s-desc">Сканировать приложения раз в неделю</div></div><div class="tog on" onclick="this.classList.toggle('on')"></div></div>
+      </div>
+      <div class="s-section">
+        <div class="sec-hd"><div class="sec-title">ИНФОРМАЦИЯ</div><div class="sec-line"></div></div>
+        <div class="info-grid">
+          <div class="info-r"><div class="info-k">МОДЕЛЬ</div><div class="info-v">КОННОР RK800</div></div>
+          <div class="info-r"><div class="info-k">ВЕРСИЯ</div><div class="info-v">1.0.0 BUILD 001</div></div>
+          <div class="info-r"><div class="info-k">STT ДВИЖОК</div><div class="info-v">FASTER-WHISPER</div></div>
+          <div class="info-r"><div class="info-k">OCR ДВИЖОК</div><div class="info-v">TESSERACT 5.x</div></div>
+        </div>
+      </div>
+      <button class="save-btn" onclick="save()">СОХРАНИТЬ НАСТРОЙКИ</button>
+    </div>
+
+  </div>
+
+  <div class="bottom-bar">
+    <div class="np-cover"><div class="np-tri"></div></div>
+    <div class="np-info">
+      <div class="np-badge">СЕЙЧАС ИГРАЕТ</div>
+      <div class="np-track">Golden Brown</div>
+      <div class="np-artist">The Stranglers</div>
+      <div class="np-lune">LUNE · ПОДКЛЮЧЕНИЕ В РАЗРАБОТКЕ</div>
+    </div>
+    <div class="np-wave" id="npWave"></div>
+    <div class="bb-sep"></div>
+    <div class="mic-wrap">
+      <div class="mic-ring"><div class="mic-dot2"></div></div>
+      <div class="mic-txt">СЛУШАЮ</div>
+    </div>
+    <div class="bb-right">
+      <div class="bb-model">CYBERLIFE SYSTEMS · RK800 #313 248 317</div>
+    </div>
+  </div>
+</div>
+
+<script>
+// CLOCK
+function updateClock() {
+  const n = new Date(), p = v => String(v).padStart(2,'0');
+  document.getElementById('clock').textContent = p(n.getHours())+':'+p(n.getMinutes())+':'+p(n.getSeconds());
+  document.getElementById('lpTime').textContent = p(n.getHours())+':'+p(n.getMinutes());
+}
+updateClock(); setInterval(updateClock, 1000);
+
+// TABS
+function switchTab(name, el) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  el.classList.add('active');
+  document.getElementById('page-' + name).classList.add('active');
+}
+
+// WAVES
+const wm = document.getElementById('waveMain');
+for (let i = 0; i < 52; i++) {
+  const b = document.createElement('div'); b.className = 'wb';
+  b.style.animationDelay = (i * 0.055) + 's';
+  b.style.animationDuration = (1.0 + Math.random() * 0.9) + 's';
+  wm.appendChild(b);
+}
+const nw = document.getElementById('npWave');
+for (let i = 0; i < 24; i++) {
+  const b = document.createElement('div'); b.className = 'np-bar';
+  b.style.animationDelay = (i * 0.055) + 's';
+  b.style.animationDuration = (0.9 + Math.random() * 0.6) + 's';
+  nw.appendChild(b);
+}
+
+// COLORS
+const COLORS = [
+  {hex:'#00B4D8',def:true},{hex:'#3A86FF'},{hex:'#06D6A0'},
+  {hex:'#FF4D6D'},{hex:'#9B5DE5'},{hex:'#FFD60A'},{hex:'#FB5607'},{hex:'#FF79C6'}
+];
+const cg = document.getElementById('colorGrid');
+COLORS.forEach(c => {
+  const ch = document.createElement('div');
+  ch.className = 'c-chip' + (c.def ? ' sel' : '');
+  ch.style.background = c.hex;
+  ch.onclick = () => { document.querySelectorAll('.c-chip').forEach(x => x.classList.remove('sel')); ch.classList.add('sel'); };
+  cg.appendChild(ch);
+});
+
+// SAVE
+function save() {
+  const btn = document.querySelector('.save-btn');
+  const orig = btn.textContent;
+  btn.textContent = 'СОХРАНЕНО ✓';
+  btn.style.background = '#06D6A0';
+  setTimeout(() => { btn.textContent = orig; btn.style.background = ''; }, 2000);
+}
+
+// TIPS с печатной машинкой
+const TIPS = [
+  { tag: 'ЭФФЕКТИВНОСТЬ', text: 'Лейтенант, Win+D мгновенно сворачивает все окна. Рекомендую запомнить.' },
+  { tag: 'БЕЗОПАСНОСТЬ', text: 'Win+L блокирует систему. Логично использовать при каждом отходе от ПК.' },
+  { tag: 'НАВИГАЦИЯ', text: 'Alt+Tab быстрее мыши. Андроиды это знают. Теперь знаете и вы.' },
+  { tag: 'СИСТЕМА', text: 'Ctrl+Shift+Esc открывает диспетчер задач напрямую. Без лишних шагов.' },
+  { tag: 'ФАЙЛЫ', text: 'Win+E — проводник. Не нужно его искать по меню.' },
+  { tag: 'СКРИНШОТ', text: 'Win+Shift+S — выделить область экрана. Точнее чем PrintScreen.' },
+];
+
+let tipIdx = 0;
+let typeTimer = null;
+
+const tipBubble = document.getElementById('tipBubble');
+const tipTag = document.getElementById('tipTag');
+const tipText = document.getElementById('tipText');
+const tipProgress = document.getElementById('tipProgress');
+
+// Создаём пипки
+TIPS.forEach((_, i) => {
+  const pip = document.createElement('div');
+  pip.className = 'tip-pip' + (i === 0 ? ' active' : '');
+  tipProgress.appendChild(pip);
+});
+
+function showTip(idx) {
+  // Скрыть текущий
+  tipBubble.classList.remove('visible');
+
+  setTimeout(() => {
+    const tip = TIPS[idx];
+    tipTag.textContent = tip.tag;
+    tipText.innerHTML = '<span class="tip-cursor"></span>';
+
+    // Обновить пипки
+    document.querySelectorAll('.tip-pip').forEach((p, i) => {
+      p.classList.toggle('active', i === idx);
+    });
+
+    tipBubble.classList.add('visible');
+
+    // Печатная машинка
+    let ci = 0;
+    if (typeTimer) clearInterval(typeTimer);
+    typeTimer = setInterval(() => {
+      if (ci >= tip.text.length) {
+        clearInterval(typeTimer);
+        // Следующий совет через 4 секунды
+        setTimeout(() => {
+          tipIdx = (tipIdx + 1) % TIPS.length;
+          showTip(tipIdx);
+        }, 4000);
+        return;
+      }
+      tipText.innerHTML = tip.text.slice(0, ci + 1) + '<span class="tip-cursor"></span>';
+      ci++;
+    }, 35);
+  }, 400);
+}
+
+// Старт
+setTimeout(() => showTip(0), 800);
+</script>
+</body>
+</html>

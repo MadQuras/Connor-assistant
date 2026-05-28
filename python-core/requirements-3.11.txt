@@ -1,0 +1,14 @@
+# Python 3.11 — ядро Connor
+faster-whisper>=1.0.0
+google-genai>=1.0.0
+PyQt5>=5.15.0
+pygame>=2.5.0
+sounddevice>=0.4.6
+numpy>=1.24.0
+torch>=2.0.0
+torchaudio>=2.0.0
+pyautogui>=0.9.54
+pygetwindow>=0.0.9
+pycaw>=20240210
+pywin32>=306
+comtypes>=1.2.0

@@ -1,0 +1,16 @@
+{
+  "accent_color": "#00B4D8",
+  "allow_shutdown": false,
+  "auto_confirm_dangerous_commands": false,
+  "command_timeout_sec": 15,
+  "first_launch": true,
+  "gemini_api_key": "YOUR_GEMINI_API_KEY_HERE",
+  "music_backend": "lune",
+  "overlay_opacity": 75,
+  "use_gemini_route": true,
+  "use_gemini_wake": true,
+  "user_name": "Лейтенант",
+  "whisper_model": "base",
+  "working_folder_path": "",
+  "yandex_music_url": "https://music.yandex.ru"
+}

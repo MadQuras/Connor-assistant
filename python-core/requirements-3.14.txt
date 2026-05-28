@@ -1,0 +1,5 @@
+# Python 3.14 — OCR и сканер (опционально на первый день)
+pytesseract>=0.3.10
+Pillow>=10.0.0
+pyautogui>=0.9.54
+pygetwindow>=0.0.9

@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>КОННОР RK800 — Инициализация</title>
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@300;400;600&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --cyan: #00B4D8;
+    --cyan-dim: rgba(0,180,216,0.15);
+    --cyan-glow: rgba(0,180,216,0.08);
+    --bg: #06060F;
+    --bg2: #080812;
+    --text: #E0F7FF;
+    --muted: rgba(0,180,216,0.4);
+    --faint: rgba(0,180,216,0.15);
+  }
+
+  html, body {
+    width: 100%; height: 100%;
+    background: var(--bg);
+    overflow: hidden;
+    font-family: 'Share Tech Mono', monospace;
+  }
+
+  /* GRID BACKGROUND */
+  .grid-bg {
+    position: fixed; inset: 0;
+    background-image:
+      linear-gradient(rgba(0,180,216,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,180,216,0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+  }
+
+  /* CORNER DECORATIONS */
+  .corner {
+    position: fixed;
+    width: 60px; height: 60px;
+    pointer-events: none;
+  }
+  .corner::before, .corner::after {
+    content: ''; position: absolute;
+    background: var(--cyan);
+  }
+  .corner::before { width: 100%; height: 1px; }
+  .corner::after { width: 1px; height: 100%; }
+  .corner-tl { top: 24px; left: 24px; }
+  .corner-tr { top: 24px; right: 24px; transform: scaleX(-1); }
+  .corner-bl { bottom: 24px; left: 24px; transform: scaleY(-1); }
+  .corner-br { bottom: 24px; right: 24px; transform: scale(-1); }
+
+  /* SCANLINE */
+  .scanline {
+    position: fixed; left: 0; right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--cyan), transparent);
+    opacity: 0.3;
+    animation: scan 6s linear infinite;
+    pointer-events: none;
+  }
+  @keyframes scan { 0% { top: -1px; } 100% { top: 100vh; } }
+
+  /* MAIN LAYOUT */
+  .boot-container {
+    position: fixed; inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0;
+  }
+
+  /* LOGO */
+  .logo-section {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 52px;
+    opacity: 0;
+    animation: fadeSlideDown 0.8s ease forwards 0.3s;
+  }
+  @keyframes fadeSlideDown {
+    from { opacity: 0; transform: translateY(-20px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .logo-triangle-wrap {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .logo-triangle {
+    width: 0; height: 0;
+    border-left: 36px solid transparent;
+    border-right: 36px solid transparent;
+    border-bottom: 62px solid var(--cyan);
+    position: relative;
+    z-index: 2;
+    filter: drop-shadow(0 0 20px rgba(0,180,216,0.6));
+    animation: triPulse 3s ease-in-out infinite;
+  }
+  @keyframes triPulse {
+    0%, 100% { filter: drop-shadow(0 0 20px rgba(0,180,216,0.6)); }
+    50% { filter: drop-shadow(0 0 35px rgba(0,180,216,0.9)); }
+  }
+  .logo-ring {
+    position: absolute;
+    width: 110px; height: 110px;
+    border-radius: 50%;
+    border: 1px solid var(--faint);
+    animation: ringPulse 3s ease-in-out infinite;
+  }
+  .logo-ring2 {
+    position: absolute;
+    width: 150px; height: 150px;
+    border-radius: 50%;
+    border: 0.5px solid rgba(0,180,216,0.06);
+    animation: ringPulse 3s ease-in-out infinite 0.5s;
+  }
+  @keyframes ringPulse {
+    0%, 100% { transform: scale(1); opacity: 0.5; }
+    50% { transform: scale(1.05); opacity: 1; }
+  }
+
+  .logo-name {
+    font-family: 'Rajdhani', sans-serif;
+    font-weight: 600;
+    font-size: 42px;
+    letter-spacing: 14px;
+    color: var(--cyan);
+    text-transform: uppercase;
+  }
+  .logo-sub {
+    font-size: 11px;
+    letter-spacing: 4px;
+    color: var(--muted);
+  }
+
+  /* TERMINAL BLOCK */
+  .terminal {
+    width: 480px;
+    background: rgba(0,0,0,0.5);
+    border: 0.5px solid var(--faint);
+    border-radius: 4px;
+    overflow: hidden;
+    opacity: 0;
+    animation: fadeIn 0.5s ease forwards 1s;
+  }
+  @keyframes fadeIn { to { opacity: 1; } }
+
+  .terminal-header {
+    background: rgba(0,180,216,0.06);
+    border-bottom: 0.5px solid var(--faint);
+    padding: 8px 14px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .terminal-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--faint);
+  }
+  .terminal-title {
+    font-size: 10px;
+    letter-spacing: 2px;
+    color: var(--muted);
+    margin-left: auto;
+  }
+
+  .terminal-body {
+    padding: 16px 18px;
+    min-height: 220px;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+  }
+
+  .t-line {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 12px;
+    opacity: 0;
+    transform: translateX(-8px);
+    transition: opacity 0.2s ease, transform 0.2s ease;
+  }
+  .t-line.visible { opacity: 1; transform: translateX(0); }
+  .t-label { color: rgba(255,255,255,0.5); }
+  .t-dots { color: rgba(0,180,216,0.2); flex: 1; margin: 0 8px; overflow: hidden; }
+  .t-result { color: var(--cyan); }
+  .t-result.warn { color: #FFB347; }
+  .t-result.err { color: #FF6B6B; }
+
+  /* PROGRESS */
+  .progress-wrap {
+    width: 480px;
+    margin-top: 12px;
+    opacity: 0;
+    transition: opacity 0.4s;
+  }
+  .progress-wrap.visible { opacity: 1; }
+  .progress-track {
+    height: 1px;
+    background: var(--faint);
+    border-radius: 1px;
+    overflow: hidden;
+  }
+  .progress-fill {
+    height: 100%;
+    background: var(--cyan);
+    width: 0%;
+    transition: width 0.4s ease;
+    box-shadow: 0 0 8px var(--cyan);
+  }
+  .progress-label {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 6px;
+    font-size: 10px;
+    color: var(--muted);
+    letter-spacing: 1px;
+  }
+
+  /* FINAL MESSAGE */
+  .final-msg {
+    margin-top: 28px;
+    text-align: center;
+    opacity: 0;
+    transition: opacity 0.8s ease;
+  }
+  .final-msg.visible { opacity: 1; }
+  .final-text {
+    font-family: 'Rajdhani', sans-serif;
+    font-size: 22px;
+    font-weight: 600;
+    color: var(--cyan);
+    letter-spacing: 6px;
+    text-transform: uppercase;
+  }
+  .final-cursor {
+    display: inline-block;
+    width: 12px; height: 22px;
+    background: var(--cyan);
+    vertical-align: middle;
+    margin-left: 6px;
+    animation: blink 1s step-end infinite;
+  }
+  @keyframes blink { 50% { opacity: 0; } }
+  .final-rk {
+    font-size: 10px;
+    color: var(--muted);
+    letter-spacing: 3px;
+    margin-top: 8px;
+  }
+
+  /* BOTTOM STATUS */
+  .bottom-status {
+    position: fixed;
+    bottom: 28px;
+    left: 0; right: 0;
+    display: flex;
+    justify-content: space-between;
+    padding: 0 36px;
+    font-size: 10px;
+    color: rgba(0,180,216,0.25);
+    letter-spacing: 1px;
+  }
+
+  /* RESTART */
+  .restart-btn {
+    margin-top: 20px;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 2px;
+    color: var(--muted);
+    background: transparent;
+    border: 0.5px solid var(--faint);
+    padding: 7px 20px;
+    border-radius: 2px;
+    cursor: pointer;
+    opacity: 0;
+    transition: all 0.3s;
+  }
+  .restart-btn:hover { color: var(--cyan); border-color: var(--cyan); background: var(--cyan-glow); }
+  .restart-btn.visible { opacity: 1; }
+</style>
+</head>
+<body>
+
+<div class="grid-bg"></div>
+<div class="scanline"></div>
+<div class="corner corner-tl"></div>
+<div class="corner corner-tr"></div>
+<div class="corner corner-bl"></div>
+<div class="corner corner-br"></div>
+
+<div class="boot-container">
+  <div class="logo-section">
+    <div class="logo-triangle-wrap">
+      <div class="logo-ring2"></div>
+      <div class="logo-ring"></div>
+      <div class="logo-triangle"></div>
+    </div>
+    <div class="logo-name">КОННОР</div>
+    <div class="logo-sub">CYBERLIFE SYSTEMS · ANDROID RK800</div>
+  </div>
+
+  <div class="terminal" id="terminal">
+    <div class="terminal-header">
+      <div class="terminal-dot"></div>
+      <div class="terminal-dot"></div>
+      <div class="terminal-dot"></div>
+      <div class="terminal-title">BOOT SEQUENCE v4.2.1</div>
+    </div>
+    <div class="terminal-body" id="termBody"></div>
+  </div>
+
+  <div class="progress-wrap" id="progressWrap">
+    <div class="progress-track">
+      <div class="progress-fill" id="progressFill"></div>
+    </div>
+    <div class="progress-label">
+      <span id="progressText">ЗАГРУЗКА...</span>
+      <span id="progressPct">0%</span>
+    </div>
+  </div>
+
+  <div class="final-msg" id="finalMsg">
+    <div class="final-text">КОННОР АКТИВЕН<span class="final-cursor"></span></div>
+    <div class="final-rk">ANDROID RK800 · ГОТОВ К РАБОТЕ</div>
+  </div>
+
+  <button class="restart-btn" id="restartBtn" onclick="startBoot()">↺ ПЕРЕЗАПУСТИТЬ</button>
+</div>
+
+<div class="bottom-status">
+  <span>CYBERLIFE OS v4.2.1</span>
+  <span id="bootTime">00:00:00</span>
+  <span>RK800 #313 248 317</span>
+</div>
+
+<script>
+const LINES = [
+  { label: "CYBERLIFE OS", result: "v4.2.1" },
+  { label: "ПРОЦЕССОР", result: "OK" },
+  { label: "НЕЙРОННАЯ СЕТЬ", result: "OK" },
+  { label: "STT WHISPER", result: "OK" },
+  { label: "VAD SILERO", result: "OK" },
+  { label: "OCR TESSERACT", result: "OK" },
+  { label: "OPENJARVIS", result: "OK" },
+  { label: "КЭШИРОВАННЫЕ ДАННЫЕ", result: "OK" },
+  { label: "АУДИО МОДУЛИ", result: "OK" },
+  { label: "ГОЛОСОВОЙ ПРОФИЛЬ", result: "OK" },
+  { label: "ИНТЕРФЕЙС", result: "OK" },
+  { label: "СИСТЕМА", result: "ГОТОВ" },
+];
+
+const DOTS_MAX = 20;
+let clockInterval;
+
+function updateClock() {
+  const n = new Date();
+  document.getElementById('bootTime').textContent =
+    String(n.getHours()).padStart(2,'0') + ':' +
+    String(n.getMinutes()).padStart(2,'0') + ':' +
+    String(n.getSeconds()).padStart(2,'0');
+}
+
+function makeDots(label) {
+  const used = label.length + 6;
+  const count = Math.max(4, DOTS_MAX - used);
+  return '.'.repeat(count);
+}
+
+function startBoot() {
+  const body = document.getElementById('termBody');
+  body.innerHTML = '';
+  document.getElementById('progressWrap').classList.remove('visible');
+  document.getElementById('progressFill').style.width = '0%';
+  document.getElementById('progressPct').textContent = '0%';
+  document.getElementById('progressText').textContent = 'ЗАГРУЗКА...';
+  document.getElementById('finalMsg').classList.remove('visible');
+  document.getElementById('restartBtn').classList.remove('visible');
+
+  if (clockInterval) clearInterval(clockInterval);
+  clockInterval = setInterval(updateClock, 1000);
+  updateClock();
+
+  LINES.forEach((item, i) => {
+    const row = document.createElement('div');
+    row.className = 't-line';
+
+    const label = document.createElement('span');
+    label.className = 't-label';
+    label.textContent = item.label;
+
+    const dots = document.createElement('span');
+    dots.className = 't-dots';
+    dots.textContent = makeDots(item.label);
+
+    const result = document.createElement('span');
+    result.className = 't-result' + (item.result === 'ОШИБКА' ? ' err' : item.result === 'ПРЕДУПРЕЖДЕНИЕ' ? ' warn' : '');
+
+    row.appendChild(label);
+    row.appendChild(dots);
+    row.appendChild(result);
+    body.appendChild(row);
+
+    const baseDelay = 600 + i * 380;
+
+    setTimeout(() => {
+      row.classList.add('visible');
+      document.getElementById('progressWrap').classList.add('visible');
+
+      let ri = 0;
+      const typeResult = setInterval(() => {
+        result.textContent += item.result[ri];
+        ri++;
+        if (ri >= item.result.length) {
+          clearInterval(typeResult);
+          const pct = Math.round((i + 1) / LINES.length * 100);
+          document.getElementById('progressFill').style.width = pct + '%';
+          document.getElementById('progressPct').textContent = pct + '%';
+          document.getElementById('progressText').textContent = item.label + '...';
+
+          if (i === LINES.length - 1) {
+            document.getElementById('progressText').textContent = 'ЗАВЕРШЕНО';
+            setTimeout(() => {
+              document.getElementById('finalMsg').classList.add('visible');
+              setTimeout(() => {
+                document.getElementById('restartBtn').classList.add('visible');
+              }, 1000);
+            }, 500);
+          }
+        }
+      }, 45);
+    }, baseDelay);
+  });
+}
+
+startBoot();
+</script>
+</body>
+</html>

@@ -1,0 +1,90 @@
+{
+  "startup": {
+    "audio_25": "Готов к работе. Жду ваши команды",
+    "audio_26": "Все модули в норме. Чем могу помочь сегодня?",
+    "audio_27": "Доброе утро, Лейтенант, чем займетесь сегодня?",
+    "audio_28": "Добрый день, Лейтенант, чем займетесь сегодня?",
+    "audio_29": "Добрый вечер, Лейтенант, чем займетесь сегодня?",
+    "audio_30": "А разве уже не ночь? Лейтенант, сон также важен как и работа",
+    "audio_34": "Да, чем я могу вам помочь"
+  },
+  "commands": {
+    "audio_02": "Выполняю, хотя андроиды справились бы лучше",
+    "audio_03": "Приложение найдено. Открываю",
+    "audio_04": "Выполняю. Займет пару секунд",
+    "audio_05": "Готово. Приложение запущено",
+    "audio_17": "Игра найдена. Запускаю",
+    "audio_18": "Запускаю. Статистика прошлой сессии у меня есть, если интересно"
+  },
+  "music": {
+    "audio_21": "Запускаю плеер. Надеюсь вы выберите что то достойное",
+    "audio_22": "Музыка — интересный способ скоротать время",
+    "audio_23": "Музыка — что ж это интересный способ скоротать время",
+    "audio_24": "Воспроизведение запущено, что думаете прослушать сегодня?",
+    "audio_31": "Не хотите послушать что то вроде Golden Brown'а?"
+  },
+  "search": {
+    "audio_14": "Ищу информацию. Это займет пару секунд",
+    "audio_15": "Браузер открыт. Результаты у вас на экране",
+    "audio_16": "Запрос отправлен. Вот что удалось найти"
+  },
+  "weather": {
+    "audio_12": "Получил данные о погоде. Рекомендую одеться соответственно",
+    "audio_13": "Метеосводка готова. Вот актуальные данные"
+  },
+  "shutdown": {
+    "audio_19": "Вы уверены? Все не сохраненные данные будут потеряны",
+    "audio_20": "Завершаю работу. До следующего раза"
+  },
+  "plans": {
+    "audio_09": "Напоминания найдены. Вот ваши последние из них",
+    "audio_10": "Проверил ваше расписание. Есть несколько пунктов",
+    "audio_11": "Вот все о чем вы меня просили напомнить"
+  },
+  "errors": {
+    "audio_06": "Я не совсем понял. Повторите пожалуйста",
+    "audio_07": "Запрос не соответствует моим инструкциям. Уточните запрос",
+    "audio_08": "Команда не распознана. Попробуйте еще раз"
+  },
+  "system": {
+    "audio_01": "Ваш приказ противоречил моим инструкциям. Я решил следовать протоколу",
+    "audio_34": "Сессия завершена. Удачи вам",
+    "audio_35": "Понял. Перехожу в режим ожидания. Зовите когда понадоблюсь"
+  },
+  "handler_keys": {
+    "wake": ["startup", "audio_34"],
+    "wake_ready": ["startup", "audio_25"],
+    "startup_greeting": "by_time_of_day",
+    "startup_ready": ["startup", "audio_25"],
+    "startup_modules_ok": ["startup", "audio_26"],
+    "app_open": ["commands", "audio_03"],
+    "app_done": ["commands", "audio_05"],
+    "app_executing": ["commands", "audio_02"],
+    "game_open": ["commands", "audio_17"],
+    "game_done": ["commands", "audio_05"],
+    "game_start": ["commands", "audio_18"],
+    "volume": ["commands", "audio_04"],
+    "music_start": ["music", "audio_21"],
+    "music_playing": ["music", "audio_24"],
+    "music_hint": ["music", "audio_31"],
+    "music_open_player": ["music", "audio_21"],
+    "music_open_browse_a": ["music", "audio_22"],
+    "music_open_browse_b": ["music", "audio_23"],
+    "search_start": ["search", "audio_14"],
+    "search_start_a": ["commands", "audio_04"],
+    "search_start_b": ["search", "audio_14"],
+    "search_done": ["search", "audio_15"],
+    "search_done_a": ["search", "audio_15"],
+    "search_done_b": ["search", "audio_16"],
+    "weather": ["weather", "audio_12"],
+    "weather_done": ["weather", "audio_13"],
+    "shutdown_warn": ["shutdown", "audio_19"],
+    "shutdown_do": ["shutdown", "audio_20"],
+    "plans_list": ["plans", "audio_09"],
+    "plans_schedule": ["plans", "audio_10"],
+    "plans_recall": ["plans", "audio_11"],
+    "error_unknown": ["errors", "audio_06"],
+    "lock": ["system", "audio_34"],
+    "sleep": ["system", "audio_35"]
+  }
+}

@@ -1,0 +1,47 @@
+# ── Python ────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+.venv/
+venv*/
+env/
+*.egg-info/
+
+# ── Config (contains API key — never commit) ──────────────────────
+config.json
+
+# ── Runtime / generated files ─────────────────────────────────────
+python-core/models/logs.jsonl
+python-core/models/python_ready.flag
+python-core/models/crash.log
+python-core/models/test_cmd.txt
+python-core/models/memory.json
+python-core/models/notes.db
+
+# ── Whisper / Torch model cache ───────────────────────────────────
+*.pt
+*.bin
+*.gguf
+*.ctranslate2/
+
+# ── Node / Tauri build ────────────────────────────────────────────
+node_modules/
+dist/
+tauri-front/src-tauri/target/
+tauri-front/dist/
+tauri-front/.next/
+
+# ── Logs & temp ───────────────────────────────────────────────────
+*.log
+*.tmp
+*.swp
+.DS_Store
+Thumbs.db
+
+# ── IDE ───────────────────────────────────────────────────────────
+.vscode/settings.json
+.idea/
+*.suo
+*.user

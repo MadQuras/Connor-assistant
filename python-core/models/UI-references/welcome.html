@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>КОННОР RK800 — Добро пожаловать</title>
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@300;400;600;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --cyan:#00B4D8;--bg:#05050E;--bg2:#07070F;--bg3:#0A0A16;
+  --text:#E0F7FF;--muted:rgba(0,180,216,0.45);--faint:rgba(0,180,216,0.12);
+  --border:rgba(0,180,216,0.16);
+}
+html,body{width:100%;height:100%;background:var(--bg);overflow:hidden;font-family:'Share Tech Mono',monospace;color:var(--text)}
+
+.grid-bg{position:fixed;inset:0;
+  background-image:linear-gradient(rgba(0,180,216,0.022) 1px,transparent 1px),linear-gradient(90deg,rgba(0,180,216,0.022) 1px,transparent 1px);
+  background-size:40px 40px;pointer-events:none;z-index:0}
+.scanline{position:fixed;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,rgba(0,180,216,0.2),transparent);animation:scan 8s linear infinite;pointer-events:none;z-index:0}
+@keyframes scan{0%{top:0}100%{top:100vh}}
+.corner{position:fixed;width:50px;height:50px;pointer-events:none;z-index:2}
+.corner::before,.corner::after{content:'';position:absolute;background:rgba(0,180,216,0.4)}
+.corner::before{width:100%;height:0.5px}.corner::after{width:0.5px;height:100%}
+.tl{top:20px;left:20px}.tr{top:20px;right:20px;transform:scaleX(-1)}
+.bl{bottom:20px;left:20px;transform:scaleY(-1)}.br{bottom:20px;right:20px;transform:scale(-1)}
+
+/* SCREENS */
+.screen{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:1;
+  opacity:0;pointer-events:none;transition:opacity 0.8s ease}
+.screen.active{opacity:1;pointer-events:auto}
+
+/* ═══════════════════════════════
+   SCREEN 1 — ПРИВЕТСТВИЕ
+═══════════════════════════════ */
+#s-greet{gap:0}
+
+.greet-time-badge{
+  font-size:10px;letter-spacing:4px;color:rgba(0,180,216,0.5);
+  border:0.5px solid rgba(0,180,216,0.2);padding:6px 20px;border-radius:20px;
+  margin-bottom:32px;
+  animation:fadeup 0.8s ease forwards;animation-delay:0.2s;opacity:0;
+}
+@keyframes fadeup{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+
+.greet-logo{
+  position:relative;display:flex;align-items:center;justify-content:center;
+  margin-bottom:36px;
+  animation:fadeup 0.8s ease forwards;animation-delay:0.4s;opacity:0;
+}
+.greet-ring1{position:absolute;width:180px;height:180px;border-radius:50%;border:0.5px solid rgba(0,180,216,0.08);animation:ringpulse 4s ease-in-out infinite}
+.greet-ring2{position:absolute;width:140px;height:140px;border-radius:50%;border:0.5px solid rgba(0,180,216,0.14);animation:ringpulse 4s ease-in-out infinite 0.5s}
+.greet-ring3{position:absolute;width:100px;height:100px;border-radius:50%;border:1px solid rgba(0,180,216,0.2);animation:ringpulse 3s ease-in-out infinite 1s}
+@keyframes ringpulse{0%,100%{transform:scale(1);opacity:0.5}50%{transform:scale(1.04);opacity:1}}
+.greet-tri{width:0;height:0;border-left:32px solid transparent;border-right:32px solid transparent;border-bottom:56px solid var(--cyan);filter:drop-shadow(0 0 24px rgba(0,180,216,0.7));animation:tripulse 3s ease-in-out infinite}
+@keyframes tripulse{0%,100%{filter:drop-shadow(0 0 24px rgba(0,180,216,0.7))}50%{filter:drop-shadow(0 0 40px rgba(0,180,216,1))}}
+
+.greet-hello{
+  font-family:'Rajdhani',sans-serif;font-weight:300;font-size:52px;color:rgba(255,255,255,0.9);
+  letter-spacing:2px;text-align:center;line-height:1;margin-bottom:10px;
+  animation:fadeup 0.8s ease forwards;animation-delay:0.6s;opacity:0;
+}
+.greet-sub{
+  font-size:11px;color:var(--muted);letter-spacing:3px;text-align:center;margin-bottom:60px;
+  animation:fadeup 0.8s ease forwards;animation-delay:0.8s;opacity:0;
+}
+.greet-clock{
+  font-family:'Rajdhani',sans-serif;font-weight:600;font-size:72px;color:var(--cyan);
+  letter-spacing:4px;text-align:center;line-height:1;margin-bottom:6px;
+  animation:fadeup 0.8s ease forwards;animation-delay:1s;opacity:0;
+  text-shadow:0 0 40px rgba(0,180,216,0.4);
+}
+.greet-date{
+  font-size:11px;color:rgba(0,180,216,0.4);letter-spacing:3px;text-align:center;margin-bottom:64px;
+  animation:fadeup 0.8s ease forwards;animation-delay:1.1s;opacity:0;
+}
+
+.greet-btns{
+  display:flex;gap:12px;
+  animation:fadeup 0.8s ease forwards;animation-delay:1.3s;opacity:0;
+}
+.btn-primary{
+  font-family:'Share Tech Mono',monospace;font-size:11px;letter-spacing:3px;
+  color:var(--bg);background:var(--cyan);border:none;
+  padding:13px 36px;border-radius:24px;cursor:pointer;transition:all 0.2s;
+}
+.btn-primary:hover{background:#00C8EF;transform:translateY(-2px);box-shadow:0 8px 24px rgba(0,180,216,0.3)}
+.btn-primary:active{transform:scale(0.97)}
+.btn-ghost{
+  font-family:'Share Tech Mono',monospace;font-size:11px;letter-spacing:3px;
+  color:var(--muted);background:transparent;
+  border:0.5px solid rgba(0,180,216,0.2);
+  padding:13px 28px;border-radius:24px;cursor:pointer;transition:all 0.2s;
+}
+.btn-ghost:hover{border-color:rgba(0,180,216,0.5);color:var(--cyan)}
+
+
+/* ═══════════════════════════════
+   SCREEN 2 — ЗНАКОМСТВО
+═══════════════════════════════ */
+#s-intro{gap:32px;max-width:520px;margin:0 auto}
+
+.intro-header{text-align:center}
+.intro-tri-sm{width:0;height:0;border-left:14px solid transparent;border-right:14px solid transparent;border-bottom:24px solid var(--cyan);margin:0 auto 16px;filter:drop-shadow(0 0 12px rgba(0,180,216,0.5))}
+.intro-title{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:28px;letter-spacing:6px;color:var(--cyan);margin-bottom:6px}
+.intro-sub{font-size:10px;color:var(--muted);letter-spacing:2px}
+
+.dialog-box{
+  background:rgba(0,0,0,0.4);border:0.5px solid rgba(0,180,216,0.2);
+  border-radius:12px;padding:20px;position:relative;
+}
+.dialog-box::before{content:'КОННОР · RK800';position:absolute;top:-9px;left:16px;
+  font-size:8px;color:rgba(0,180,216,0.5);letter-spacing:2px;
+  background:var(--bg);padding:0 8px}
+.dialog-text{font-size:13px;color:rgba(255,255,255,0.7);line-height:1.8}
+.dialog-cursor{display:inline-block;width:8px;height:14px;background:var(--cyan);vertical-align:middle;margin-left:2px;animation:blink 1s step-end infinite}
+@keyframes blink{50%{opacity:0}}
+
+.input-wrap{display:flex;flex-direction:column;gap:8px}
+.input-label{font-size:9px;color:rgba(0,180,216,0.4);letter-spacing:2px}
+.connor-input{
+  background:rgba(0,0,0,0.4);border:0.5px solid rgba(0,180,216,0.3);
+  border-radius:8px;padding:14px 16px;
+  font-family:'Share Tech Mono',monospace;font-size:14px;color:var(--text);
+  outline:none;transition:border-color 0.2s;letter-spacing:1px;width:100%;
+}
+.connor-input:focus{border-color:var(--cyan);box-shadow:0 0 20px rgba(0,180,216,0.1)}
+.connor-input::placeholder{color:rgba(0,180,216,0.2)}
+
+.intro-btns{display:flex;gap:10px;justify-content:flex-end}
+
+
+/* ═══════════════════════════════
+   SCREEN 3 — СКАНИРОВАНИЕ
+═══════════════════════════════ */
+#s-scan{gap:0;max-width:560px;margin:0 auto}
+
+.scan-header{text-align:center;margin-bottom:36px}
+.scan-title{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:22px;letter-spacing:5px;color:var(--cyan);margin-bottom:6px}
+.scan-sub{font-size:10px;color:var(--muted);letter-spacing:2px}
+
+.scan-instruction{
+  background:rgba(0,0,0,0.5);border:0.5px solid rgba(0,180,216,0.2);
+  border-left:2px solid var(--cyan);border-radius:0 8px 8px 0;
+  padding:16px;margin-bottom:20px;
+}
+.scan-step{display:flex;align-items:flex-start;gap:12px;margin-bottom:12px}
+.scan-step:last-child{margin-bottom:0}
+.scan-num{
+  width:22px;height:22px;border-radius:50%;border:0.5px solid var(--cyan);
+  color:var(--cyan);font-size:10px;display:flex;align-items:center;justify-content:center;
+  flex-shrink:0;margin-top:1px;
+}
+.scan-step-text{font-size:12px;color:rgba(255,255,255,0.6);line-height:1.7}
+.scan-step-text b{color:rgba(255,255,255,0.85);font-weight:400}
+
+.scan-terminal{
+  background:rgba(0,0,0,0.6);border:0.5px solid rgba(0,180,216,0.15);
+  border-radius:8px;overflow:hidden;margin-bottom:20px;
+}
+.scan-term-hd{
+  background:rgba(0,180,216,0.05);border-bottom:0.5px solid rgba(0,180,216,0.1);
+  padding:8px 14px;display:flex;align-items:center;gap:8px;
+}
+.scan-term-dot{width:7px;height:7px;border-radius:50%;background:rgba(0,180,216,0.2)}
+.scan-term-title{font-size:9px;color:rgba(0,180,216,0.3);letter-spacing:2px;margin-left:auto}
+.scan-term-body{padding:14px 16px;min-height:100px;font-size:11px;color:rgba(0,180,216,0.6);line-height:1.9}
+.scan-log-line{opacity:0;transform:translateX(-6px);transition:all 0.3s}
+.scan-log-line.show{opacity:1;transform:translateX(0)}
+
+.scan-progress-wrap{margin-bottom:24px}
+.scan-prog-label{display:flex;justify-content:space-between;font-size:9px;color:rgba(0,180,216,0.4);letter-spacing:1px;margin-bottom:8px}
+.scan-prog-track{height:2px;background:rgba(0,180,216,0.1);border-radius:1px;overflow:hidden}
+.scan-prog-fill{height:100%;background:var(--cyan);width:0%;transition:width 0.4s ease;border-radius:1px;box-shadow:0 0 8px var(--cyan)}
+
+.scan-btns{display:flex;gap:10px;justify-content:space-between;align-items:center}
+.scan-note{font-size:9px;color:rgba(0,180,216,0.25);letter-spacing:1px}
+
+
+/* ═══════════════════════════════
+   SCREEN 4 — ГОТОВО
+═══════════════════════════════ */
+#s-ready{gap:20px;text-align:center}
+
+.ready-logo{
+  position:relative;display:flex;align-items:center;justify-content:center;
+  margin-bottom:8px;
+}
+.ready-ring{position:absolute;width:120px;height:120px;border-radius:50%;border:0.5px solid rgba(0,180,216,0.2);animation:ringpulse 3s ease-in-out infinite}
+.ready-tri{width:0;height:0;border-left:26px solid transparent;border-right:26px solid transparent;border-bottom:44px solid var(--cyan);filter:drop-shadow(0 0 20px rgba(0,180,216,0.8))}
+.ready-title{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:36px;letter-spacing:6px;color:var(--cyan)}
+.ready-name{font-family:'Rajdhani',sans-serif;font-weight:300;font-size:22px;color:rgba(255,255,255,0.7);letter-spacing:4px;margin-bottom:8px}
+.ready-text{font-size:12px;color:var(--muted);max-width:380px;margin:0 auto;line-height:1.8}
+.ready-divider{width:60px;height:0.5px;background:linear-gradient(90deg,transparent,var(--cyan),transparent);margin:0 auto}
+.ready-stats{display:flex;gap:24px;justify-content:center}
+.ready-stat{text-align:center}
+.ready-stat-val{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:24px;color:var(--cyan)}
+.ready-stat-label{font-size:9px;color:rgba(0,180,216,0.4);letter-spacing:2px;margin-top:2px}
+
+/* SKIP BTN */
+.skip-btn{
+  position:fixed;bottom:32px;right:36px;z-index:10;
+  font-family:'Share Tech Mono',monospace;font-size:9px;letter-spacing:2px;
+  color:rgba(0,180,216,0.3);background:transparent;
+  border:0.5px solid rgba(0,180,216,0.12);padding:7px 16px;border-radius:20px;
+  cursor:pointer;transition:all 0.2s;
+}
+.skip-btn:hover{color:rgba(0,180,216,0.6);border-color:rgba(0,180,216,0.3)}
+
+/* STEP DOTS */
+.step-dots{
+  position:fixed;bottom:32px;left:50%;transform:translateX(-50%);
+  display:flex;gap:8px;z-index:10;
+}
+.step-dot{width:6px;height:6px;border-radius:50%;background:rgba(0,180,216,0.15);border:0.5px solid rgba(0,180,216,0.2);transition:all 0.3s}
+.step-dot.active{background:var(--cyan);border-color:var(--cyan)}
+</style>
+</head>
+<body>
+<div class="grid-bg"></div>
+<div class="scanline"></div>
+<div class="corner tl"></div><div class="corner tr"></div>
+<div class="corner bl"></div><div class="corner br"></div>
+
+<!-- STEP DOTS -->
+<div class="step-dots">
+  <div class="step-dot active" id="dot0"></div>
+  <div class="step-dot" id="dot1"></div>
+  <div class="step-dot" id="dot2"></div>
+  <div class="step-dot" id="dot3"></div>
+</div>
+
+<!-- SKIP -->
+<button class="skip-btn" id="skipBtn" onclick="skipAll()">ПРОПУСТИТЬ ↗</button>
+
+<!-- ═══ SCREEN 1 — ПРИВЕТСТВИЕ ═══ -->
+<div class="screen active" id="s-greet">
+  <div class="greet-time-badge" id="timeBadge">ВРЕМЯ СУТОК</div>
+  <div class="greet-logo">
+    <div class="greet-ring1"></div>
+    <div class="greet-ring2"></div>
+    <div class="greet-ring3"></div>
+    <div class="greet-tri"></div>
+  </div>
+  <div class="greet-hello" id="greetHello">Добрый день</div>
+  <div class="greet-sub">СИСТЕМА КОННОР RK800 · CYBERLIFE</div>
+  <div class="greet-clock" id="greetClock">00:00</div>
+  <div class="greet-date" id="greetDate">—</div>
+  <div class="greet-btns">
+    <button class="btn-primary" onclick="goTo(1)">НАЧАТЬ →</button>
+    <button class="btn-ghost" onclick="skipAll()">ПРОПУСТИТЬ</button>
+  </div>
+</div>
+
+<!-- ═══ SCREEN 2 — ЗНАКОМСТВО ═══ -->
+<div class="screen" id="s-intro" style="flex-direction:column;width:100%;padding:0 20px">
+  <div class="intro-header">
+    <div class="intro-tri-sm"></div>
+    <div class="intro-title">ПЕРВЫЙ ЗАПУСК</div>
+    <div class="intro-sub">КОННОР ЗНАКОМИТСЯ С ПОЛЬЗОВАТЕЛЕМ</div>
+  </div>
+  <div class="dialog-box" id="introDialog">
+    <div class="dialog-text" id="introText"><span class="dialog-cursor"></span></div>
+  </div>
+  <div class="input-wrap">
+    <div class="input-label">КАК ВАС НАЗЫВАТЬ?</div>
+    <input class="connor-input" id="nameInput" type="text" placeholder="Введите имя или позывной..." maxlength="32" oninput="checkName()">
+  </div>
+  <div class="intro-btns">
+    <button class="btn-ghost" onclick="goTo(0)">← НАЗАД</button>
+    <button class="btn-primary" id="btnNext2" onclick="goTo(2)" disabled style="opacity:0.4;cursor:not-allowed">ДАЛЕЕ →</button>
+  </div>
+</div>
+
+<!-- ═══ SCREEN 3 — СКАНИРОВАНИЕ ═══ -->
+<div class="screen" id="s-scan" style="flex-direction:column;width:100%;padding:0 20px">
+  <div class="scan-header">
+    <div class="scan-title">ДИАГНОСТИКА</div>
+    <div class="scan-sub">КОННОР ИЗУЧАЕТ ВАШУ СИСТЕМУ</div>
+  </div>
+
+  <div class="scan-instruction">
+    <div class="scan-step">
+      <div class="scan-num">1</div>
+      <div class="scan-step-text">Нажмите <b>Win + D</b> чтобы свернуть все окна и показать рабочий стол</div>
+    </div>
+    <div class="scan-step">
+      <div class="scan-num">2</div>
+      <div class="scan-step-text">Нажмите <b>НАЧАТЬ СКАНИРОВАНИЕ</b> — Коннор сделает снимок рабочего стола и проверит установленные приложения</div>
+    </div>
+    <div class="scan-step">
+      <div class="scan-num">3</div>
+      <div class="scan-step-text">Дождитесь завершения. Результаты сохранятся в <b>memory.json</b></div>
+    </div>
+  </div>
+
+  <div class="scan-terminal">
+    <div class="scan-term-hd">
+      <div class="scan-term-dot"></div>
+      <div class="scan-term-dot"></div>
+      <div class="scan-term-dot"></div>
+      <div class="scan-term-title">SCANNER · PYTHON 3.14</div>
+    </div>
+    <div class="scan-term-body" id="scanLog">
+      <div style="color:rgba(0,180,216,0.3)">Ожидание запуска сканирования...</div>
+    </div>
+  </div>
+
+  <div class="scan-progress-wrap">
+    <div class="scan-prog-label">
+      <span id="scanStatus">ГОТОВ К СКАНИРОВАНИЮ</span>
+      <span id="scanPct">0%</span>
+    </div>
+    <div class="scan-prog-track">
+      <div class="scan-prog-fill" id="scanFill"></div>
+    </div>
+  </div>
+
+  <div class="scan-btns">
+    <button class="btn-ghost" onclick="goTo(1)">← НАЗАД</button>
+    <div class="scan-note" id="scanNote">scanner.py запускается отдельным процессом Python</div>
+    <button class="btn-primary" id="btnScan" onclick="startScan()">НАЧАТЬ СКАНИРОВАНИЕ</button>
+  </div>
+</div>
+
+<!-- ═══ SCREEN 4 — ГОТОВО ═══ -->
+<div class="screen" id="s-ready" style="flex-direction:column">
+  <div class="ready-logo">
+    <div class="ready-ring"></div>
+    <div class="ready-tri"></div>
+  </div>
+  <div>
+    <div class="ready-title">СИСТЕМА ГОТОВА</div>
+    <div class="ready-name" id="readyName">ЛЕЙТЕНАНТ</div>
+  </div>
+  <div class="ready-divider"></div>
+  <div class="ready-text" id="readyText">Коннор инициализирован и готов к работе. Скажите "Коннор" чтобы активировать ассистента.</div>
+  <div class="ready-stats">
+    <div class="ready-stat"><div class="ready-stat-val" id="readyApps">0</div><div class="ready-stat-label">ПРИЛОЖЕНИЙ</div></div>
+    <div class="ready-stat"><div class="ready-stat-val" id="readyGames">0</div><div class="ready-stat-label">ИГР</div></div>
+    <div class="ready-stat"><div class="ready-stat-val">33</div><div class="ready-stat-label">АУДИО ФРАЗ</div></div>
+  </div>
+  <button class="btn-primary" onclick="finish()" style="margin-top:8px">ЗАПУСТИТЬ КОННОРА →</button>
+</div>
+
+<script>
+// SCREENS
+const SCREENS = ['s-greet','s-intro','s-scan','s-ready'];
+let currentScreen = 0;
+
+function goTo(idx) {
+  document.getElementById(SCREENS[currentScreen]).classList.remove('active');
+  currentScreen = idx;
+  document.getElementById(SCREENS[currentScreen]).classList.add('active');
+  document.querySelectorAll('.step-dot').forEach((d,i) => d.classList.toggle('active', i === idx));
+  if (idx === 1) startIntroType();
+  if (idx === 3) showReady();
+  document.getElementById('skipBtn').style.display = idx === 3 ? 'none' : 'block';
+}
+
+function skipAll() { goTo(3); }
+
+// CLOCK
+function updateGreet() {
+  const n = new Date();
+  const h = n.getHours(), m = n.getMinutes();
+  const pad = v => String(v).padStart(2,'0');
+  document.getElementById('greetClock').textContent = pad(h)+':'+pad(m);
+
+  const DAYS = ['воскресенье','понедельник','вторник','среда','четверг','пятница','суббота'];
+  const MONTHS = ['января','февраля','марта','апреля','мая','июня','июля','августа','сентября','октября','ноября','декабря'];
+  document.getElementById('greetDate').textContent = DAYS[n.getDay()]+', '+n.getDate()+' '+MONTHS[n.getMonth()]+' '+n.getFullYear();
+
+  let greeting, badge;
+  if (h >= 5 && h < 12)       { greeting = 'Доброе утро';   badge = 'УТРО · 05:00 — 12:00'; }
+  else if (h >= 12 && h < 17) { greeting = 'Добрый день';   badge = 'ДЕНЬ · 12:00 — 17:00'; }
+  else if (h >= 17 && h < 22) { greeting = 'Добрый вечер';  badge = 'ВЕЧЕР · 17:00 — 22:00'; }
+  else                         { greeting = 'Доброй ночи';   badge = 'НОЧЬ · 22:00 — 05:00'; }
+
+  document.getElementById('greetHello').textContent = greeting;
+  document.getElementById('timeBadge').textContent = badge;
+}
+updateGreet(); setInterval(updateGreet, 10000);
+
+// INTRO TYPEWRITER
+const INTRO_TEXT = 'Меня зовут Коннор. Я андроид, разработанный компанией Cyberlife. Рад познакомиться. Как мне к вам обращаться?';
+let introTyped = false;
+
+function startIntroType() {
+  if (introTyped) return;
+  introTyped = true;
+  const el = document.getElementById('introText');
+  el.innerHTML = '<span class="dialog-cursor"></span>';
+  let i = 0;
+  const iv = setInterval(() => {
+    if (i >= INTRO_TEXT.length) { clearInterval(iv); return; }
+    el.innerHTML = INTRO_TEXT.slice(0, i+1) + '<span class="dialog-cursor"></span>';
+    i++;
+  }, 30);
+}
+
+function checkName() {
+  const val = document.getElementById('nameInput').value.trim();
+  const btn = document.getElementById('btnNext2');
+  btn.disabled = val.length < 1;
+  btn.style.opacity = val.length < 1 ? '0.4' : '1';
+  btn.style.cursor = val.length < 1 ? 'not-allowed' : 'pointer';
+}
+
+// SCAN
+const SCAN_LOGS = [
+  { text: '> scanner.py запущен', delay: 200 },
+  { text: '> захват рабочего стола...', delay: 800 },
+  { text: '> OCR: обнаружено 8 иконок', delay: 1600 },
+  { text: '> сканирование Program Files\\...', delay: 2400 },
+  { text: '> найдено: chrome.exe', delay: 3000 },
+  { text: '> найдено: steam.exe', delay: 3500 },
+  { text: '> найдено: cs2.exe', delay: 4000 },
+  { text: '> сканирование AppData\\Local\\...', delay: 4600 },
+  { text: '> найдено: code.exe', delay: 5200 },
+  { text: '> найдено: discord.exe', delay: 5700 },
+  { text: '> классификация: 12 приложений, 4 игры', delay: 6400 },
+  { text: '> запись в memory.json...', delay: 7000 },
+  { text: '> СКАНИРОВАНИЕ ЗАВЕРШЕНО ✓', delay: 7600 },
+];
+
+let scanRunning = false;
+
+function startScan() {
+  if (scanRunning) return;
+  scanRunning = true;
+  const btn = document.getElementById('btnScan');
+  btn.disabled = true; btn.style.opacity = '0.5';
+  const log = document.getElementById('scanLog');
+  log.innerHTML = '';
+
+  SCAN_LOGS.forEach((item, i) => {
+    setTimeout(() => {
+      const line = document.createElement('div');
+      line.className = 'scan-log-line';
+      line.textContent = item.text;
+      if (item.text.includes('ЗАВЕРШЕНО')) line.style.color = '#06D6A0';
+      log.appendChild(line);
+      setTimeout(() => line.classList.add('show'), 50);
+      log.scrollTop = log.scrollHeight;
+
+      const pct = Math.round((i+1) / SCAN_LOGS.length * 100);
+      document.getElementById('scanFill').style.width = pct + '%';
+      document.getElementById('scanPct').textContent = pct + '%';
+      document.getElementById('scanStatus').textContent = item.text.replace('> ','').toUpperCase();
+
+      if (i === SCAN_LOGS.length - 1) {
+        setTimeout(() => {
+          document.getElementById('scanStatus').textContent = 'ЗАВЕРШЕНО';
+          btn.textContent = 'ДАЛЕЕ →';
+          btn.disabled = false; btn.style.opacity = '1';
+          btn.onclick = () => goTo(3);
+        }, 600);
+      }
+    }, item.delay);
+  });
+}
+
+// READY
+function showReady() {
+  const name = document.getElementById('nameInput').value.trim() || 'ЛЕЙТЕНАНТ';
+  document.getElementById('readyName').textContent = name.toUpperCase();
+  document.getElementById('readyApps').textContent = '12';
+  document.getElementById('readyGames').textContent = '4';
+  const txt = document.getElementById('readyText');
+  txt.textContent = `Коннор инициализирован. ${name}, скажите "Коннор" чтобы активировать ассистента.`;
+}
+
+function finish() {
+  document.querySelector('.step-dots').style.display = 'none';
+  document.getElementById('skipBtn').style.display = 'none';
+  alert('→ Переход в главное окно (boot_screen.html → connor_app.html)');
+}
+</script>
+</body>
+</html>
