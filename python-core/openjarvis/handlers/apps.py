@@ -72,11 +72,11 @@ def handle(arg: str, original_text: str = "") -> None:
         MemoryStore().save(d)
         is_game = any(hint in low for hint in GAME_HINTS)
         if is_game:
-            audio_catalog.play_key("game_open", block=False)   # audio_17: "Игра найдена. Запускаю"
-            audio_catalog.play_key("game_done", block=False)   # audio_05: "Готово. Приложение запущено"
+            # 10% chance, rotates: audio_17 → audio_05 → audio_17 → …
+            audio_catalog.maybe_play("apps_game", "game_open", "game_done", block=False)
         else:
-            audio_catalog.play_key("app_open", block=False)    # audio_03: "Приложение найдено. Открываю"
-        audio_catalog.play_key("app_executing", block=False)   # audio_02: "Выполняю, хотя андроиды справились бы лучше"
+            # 10% chance, rotates: audio_03 → audio_02 → audio_03 → …
+            audio_catalog.maybe_play("apps_app", "app_open", "app_executing", block=False)
     else:
         ov.show_text(
             f"Приложение «{query}» не найдено.\nПопробуйте запустить сканирование.",

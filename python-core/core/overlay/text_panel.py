@@ -3,15 +3,16 @@
 import json
 from pathlib import Path
 
-from PyQt5.QtCore import Qt, QTimer, QPropertyAnimation, QEasingCurve, QPoint
-from PyQt5.QtGui import QFont, QColor, QIcon
+from PyQt5.QtCore import Qt, QTimer, QPropertyAnimation, QEasingCurve, QPoint, QSize, QRect
+from PyQt5.QtGui import QFont, QColor, QIcon, QFontMetrics
 from PyQt5.QtWidgets import (
     QApplication, QLabel, QWidget,
     QVBoxLayout, QHBoxLayout, QFrame,
 )
 
-WIDTH  = 520
-HEIGHT = 420
+WIDTH    = 520
+MAX_H    = 420
+MIN_H    = 110
 
 _ICON_PATH = str(
     Path(__file__).parents[3] / "tauri-front" / "src-tauri" / "icons" / "icon.png"
@@ -52,10 +53,11 @@ class TextPanel(QWidget):
     Left-side overlay — slides in from the left when Connor speaks.
 
     Tags:
-      ВРЕМЯ  — huge clock (52 px) + date beneath, no typewriter
-      others — typewriter effect at 14 px
+      ВРЕМЯ  — huge clock (52 px) + date, instant display
+      others — typewriter effect that starts AFTER the slide-in finishes
 
-    Accent colour auto-reloads from config.json every 5 seconds.
+    Height adapts to content (MIN_H … MAX_H).
+    Accent colour auto-reloads from config.json every second.
     """
 
     PADDING = 18
@@ -68,10 +70,11 @@ class TextPanel(QWidget):
         self.setAttribute(Qt.WA_TranslucentBackground)
         self.setAttribute(Qt.WA_ShowWithoutActivating)
         self.setWindowIcon(QIcon(_ICON_PATH))
-        self.setFixedSize(WIDTH, HEIGHT)
 
         screen = QApplication.primaryScreen().geometry()
-        self._y = (screen.height() - HEIGHT) // 2
+        self._y = (screen.height() - MIN_H) // 2
+        # Start at adaptive min size; will resize before each show
+        self.resize(WIDTH, MIN_H)
         self.move(-WIDTH, self._y)
 
         self._cyan = _load_accent()
@@ -126,6 +129,8 @@ class TextPanel(QWidget):
         self._slide_in  = QPropertyAnimation(self, b"pos")
         self._slide_in.setDuration(320)
         self._slide_in.setEasingCurve(QEasingCurve.OutCubic)
+        # Start typewriter AFTER slide-in completes
+        self._slide_in.finished.connect(self._on_slide_in_done)
 
         self._slide_out = QPropertyAnimation(self, b"pos")
         self._slide_out.setDuration(260)
@@ -139,16 +144,16 @@ class TextPanel(QWidget):
 
         self._type_timer = QTimer(self)
         self._type_timer.timeout.connect(self._type_tick)
-        self._type_text: str = ""
-        self._type_idx: int  = 0
+        self._type_text:    str = ""
+        self._pending_text: str = ""   # text waiting for slide-in to complete
+        self._type_idx:     int = 0
 
-        # Accent colour watcher — reloads config every 5 seconds
         self._accent_timer = QTimer(self)
         self._accent_timer.timeout.connect(self._maybe_reload_accent)
         self._accent_timer.start(1000)
 
         self._click_through_done = False
-        self._current_tag: str = ""
+        self._current_tag: str   = ""
 
     # ── Accent colour ────────────────────────────────────────────
 
@@ -188,9 +193,38 @@ class TextPanel(QWidget):
         if new.name() != self._cyan.name():
             self._cyan = new
             self._apply_accent()
-            # Re-render current text with new colour if it's a clock
             if self._current_tag == "ВРЕМЯ" and self._text_lbl.text():
                 self._show_time_rich(self._type_text or self._text_lbl.text())
+
+    # ── Height calculation ───────────────────────────────────────
+
+    def _calc_height(self, text: str) -> int:
+        """Compute window height that fits `text` at Consolas 14, word-wrapped."""
+        fm = QFontMetrics(QFont("Consolas", 14))
+        usable_w = WIDTH - 2 * self.PADDING - 4
+        total_text_px = 0
+        for line in text.split("\n"):
+            if not line:
+                total_text_px += fm.lineSpacing()
+                continue
+            rect = fm.boundingRect(
+                QRect(0, 0, usable_w, 9999),
+                Qt.TextWordWrap | Qt.AlignLeft,
+                line,
+            )
+            total_text_px += rect.height() + 4   # small inter-line gap
+
+        HEADER_H = 82   # logo row + sep + tag label + top padding
+        FOOTER_H = 30   # bottom sep + bottom padding
+        h = total_text_px + HEADER_H + FOOTER_H
+        return max(MIN_H, min(MAX_H, h))
+
+    def _resize_for(self, text: str) -> None:
+        """Resize window to fit text, repositioning vertically on screen."""
+        h = self._calc_height(text)
+        screen = QApplication.primaryScreen().geometry()
+        self._y = (screen.height() - h) // 2
+        self.resize(WIDTH, h)
 
     # ── Public API ───────────────────────────────────────────────
 
@@ -199,6 +233,8 @@ class TextPanel(QWidget):
         self._tag_lbl.setText(self._current_tag)
         self._hide_timer.stop()
         self._slide_out.stop()
+        self._type_timer.stop()
+        self._pending_text = ""
 
         if not self.isVisible():
             super().show()
@@ -207,13 +243,15 @@ class TextPanel(QWidget):
                 self._click_through_done = True
 
         if self._current_tag == "ВРЕМЯ":
+            # Clock: adapt height for two lines, show immediately (no typewriter)
+            self._resize_for(text)
             self._show_time_rich(text)
         else:
-            self._text_lbl.setFont(QFont("Consolas", 14))
-            self._start_typewriter(text)
+            # Regular text: resize first, clear label, then typewrite after slide-in
+            self._resize_for(text)
+            self._text_lbl.setText("")
+            self._pending_text = text
 
-        screen = QApplication.primaryScreen().geometry()
-        self._y = (screen.height() - HEIGHT) // 2
         self._slide_in.setStartValue(QPoint(-WIDTH, self._y))
         self._slide_in.setEndValue(QPoint(0, self._y))
         self._slide_in.start()
@@ -225,6 +263,12 @@ class TextPanel(QWidget):
         self._start_slide_out()
 
     # ── Private ──────────────────────────────────────────────────
+
+    def _on_slide_in_done(self) -> None:
+        """Called when slide-in animation finishes — kick off typewriter."""
+        if self._pending_text and self._current_tag != "ВРЕМЯ":
+            self._start_typewriter(self._pending_text)
+            self._pending_text = ""
 
     def _show_time_rich(self, text: str) -> None:
         """Render time in large HTML. text format: 'HH:MM\nDay, DD Month YYYY'"""
@@ -247,6 +291,7 @@ class TextPanel(QWidget):
 
     def _start_slide_out(self) -> None:
         self._type_timer.stop()
+        self._pending_text = ""
         if self.isVisible():
             self._slide_in.stop()
             self._slide_out.setStartValue(QPoint(self.x(), self._y))
@@ -254,11 +299,11 @@ class TextPanel(QWidget):
             self._slide_out.start()
 
     def _start_typewriter(self, text: str) -> None:
-        self._type_timer.stop()
         self._type_text = text
         self._type_idx  = 0
         self._text_lbl.setText("")
-        self._type_timer.start(22)
+        # ~28 ms per character — visible and comfortable on screen
+        self._type_timer.start(28)
 
     def _type_tick(self) -> None:
         self._type_idx += 1

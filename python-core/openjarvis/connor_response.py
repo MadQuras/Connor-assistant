@@ -9,7 +9,6 @@ Usage:
 """
 from __future__ import annotations
 
-import random
 import threading
 from typing import Optional
 
@@ -20,20 +19,8 @@ from core import logger
 # VOLUME → volume-level readout
 _VISUAL_ONLY = {"TIME", "VOLUME"}
 
-# Categories excluded from random audio (greetings handled elsewhere).
-_NO_AUDIO = {"UNKNOWN"}
-
-# Per-category fallback audio to play on the lucky 10 % roll.
-# User will specify a full ordered sequence later; for now one per category.
-_CAT_AUDIO: dict[str, tuple[str, str]] = {
-    "WEATHER":  ("weather",  "audio_12.wav"),
-    "SEARCH":   ("search",   "audio_14.wav"),
-    "APPS":     ("commands", "audio_03.wav"),
-    "MUSIC":    ("music",    "audio_21.wav"),
-    "PLANS":    ("plans",    "audio_09.wav"),
-    "LOCK":     ("system",   "audio_01.wav"),
-    "SHUTDOWN": ("shutdown", "audio_20.wav"),
-}
+# Categories excluded from random audio (their handlers call maybe_play themselves).
+_NO_AUDIO = {"UNKNOWN", "APPS", "MUSIC", "SEARCH", "WEATHER", "PLANS"}
 
 _PROMPT = """\
 Ты — Коннор, андроид-детектив RK800 из Detroit: Become Human. \
@@ -114,16 +101,6 @@ def _gemini_text(category: str, original_text: str, timeout: float = 3.5) -> Opt
     return None
 
 
-def _play_audio(category: str) -> None:
-    entry = _CAT_AUDIO.get(category)
-    if not entry:
-        return
-    try:
-        from core import tts_player
-        tts_player.play_named(entry[0], entry[1], block=False)
-    except Exception as e:
-        logger.log_error(f"connor_response audio: {e}")
-
 
 def respond(category: str, original_text: str = "") -> None:
     """
@@ -142,8 +119,15 @@ def respond(category: str, original_text: str = "") -> None:
             else:
                 logger.log_system(f"connor_response: no Gemini text for {cat}")
 
-        # 10 % random audio (not for greetings / unknowns)
-        if cat not in _NO_AUDIO and random.randint(1, 10) == 1:
-            _play_audio(cat)
+        # 10% audio — only for categories not handled by their own handler
+        # (SHUTDOWN, LOCK, VOLUME, TIME). Uses maybe_play for consistent counter.
+        if cat not in _NO_AUDIO:
+            from core import audio_catalog as _ac
+            if cat == "SHUTDOWN":
+                _ac.maybe_play("resp_shutdown", "shutdown_do", block=False)
+            elif cat == "LOCK":
+                _ac.maybe_play("resp_lock", "lock", block=False)
+            elif cat == "VOLUME":
+                _ac.maybe_play("resp_volume", "app_executing", block=False)
 
     threading.Thread(target=_run, name="connor-response", daemon=True).start()

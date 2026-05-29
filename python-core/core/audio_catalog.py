@@ -66,6 +66,8 @@ def play_startup_boot(block: bool = True) -> str:
 
 
 _round_robin_counters: dict = {}
+_maybe_play_counters: dict = {}
+_call_counters: dict = {}
 
 
 def play_key_random(*keys: str, block: bool = False) -> None:
@@ -80,3 +82,26 @@ def play_key_random(*keys: str, block: bool = False) -> None:
 def play_music_browse(block: bool = False) -> None:
     """Alternates between audio_22 and audio_23 on each call using round-robin."""
     play_key_random("music_open_browse_a", "music_open_browse_b", block=block)
+
+
+def maybe_play(cmd_id: str, *keys: str, block: bool = False) -> bool:
+    """
+    Play exactly ONE audio from keys with 10% chance (every 10th call).
+    Uses round-robin within keys so responses vary each time.
+
+    cmd_id  — unique string per command context, e.g. "apps", "search", "weather"
+    keys    — handler_key names to rotate through on lucky hits
+    Returns True if audio was played.
+    """
+    if not keys:
+        return False
+    n = _call_counters.get(cmd_id, 0) + 1
+    _call_counters[cmd_id] = n
+    if n % 10 != 0:
+        return False
+    # Round-robin among keys on each lucky hit
+    rr_idx = _maybe_play_counters.get(cmd_id, 0)
+    key = keys[rr_idx % len(keys)]
+    _maybe_play_counters[cmd_id] = rr_idx + 1
+    play_key(key, block=block)
+    return True

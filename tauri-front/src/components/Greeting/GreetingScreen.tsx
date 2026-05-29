@@ -37,12 +37,16 @@ function formatDate(date: Date): string {
 
 // CSS injected once
 const STYLE = `
+@keyframes gs-screen-in {
+  0%   { opacity: 0; }
+  100% { opacity: 1; }
+}
 @keyframes gs-fade-up {
-  from { opacity: 0; transform: translateY(14px); }
+  from { opacity: 0; transform: translateY(18px); }
   to   { opacity: 1; transform: translateY(0); }
 }
 @keyframes gs-fade-down {
-  from { opacity: 0; transform: translateY(-10px); }
+  from { opacity: 0; transform: translateY(-12px); }
   to   { opacity: 1; transform: translateY(0); }
 }
 @keyframes gs-divider-grow {
@@ -103,10 +107,12 @@ export function GreetingScreen({ onFinish, userName }: GreetingScreenProps) {
   // Inject keyframes once
   useEffect(() => { injectStyle(); }, []);
 
-  // Trigger entrance animation on next frame
+  // Inject keyframes first, then give the browser ~200 ms to parse them
+  // before kicking off content animations.  Using rAF alone fires too
+  // quickly and the content appears before animations play.
   useEffect(() => {
-    const id = requestAnimationFrame(() => setVisible(true));
-    return () => cancelAnimationFrame(id);
+    const id = setTimeout(() => setVisible(true), 200);
+    return () => clearTimeout(id);
   }, []);
 
   const dismiss = useCallback(() => {
@@ -131,9 +137,12 @@ export function GreetingScreen({ onFinish, userName }: GreetingScreenProps) {
   const greeting = getGreeting(now.getHours());
   const displayName = (userName || 'ЛЕЙТЕНАНТ').toUpperCase();
 
-  const wrapAnim = exiting
+  // Screen always fades in from black on mount; then flickers; then fades out on exit.
+  const screenAnim = exiting
     ? anim('gs-fade-out', '0.7s', '0s', 'forwards', 'ease')
-    : undefined;
+    : visible
+      ? anim('gs-flicker', '8s', '2.5s', 'infinite')
+      : anim('gs-screen-in', '0.35s', '0s', 'forwards', 'ease');
 
   return (
     <div
@@ -146,10 +155,8 @@ export function GreetingScreen({ onFinish, userName }: GreetingScreenProps) {
         cursor: 'pointer', userSelect: 'none',
         fontFamily: 'var(--font-mono, "Share Tech Mono", monospace)',
         zIndex: 9999,
-        animation: wrapAnim,
-        // Subtle CRT flicker
-        ...(visible && !exiting ? { animation: anim('gs-flicker', '8s', '2s', 'infinite') } : {}),
-        ...(exiting ? { animation: wrapAnim } : {}),
+        opacity: exiting ? undefined : (visible ? undefined : 0),
+        animation: screenAnim,
       }}
     >
       {/* Scanline sweep */}

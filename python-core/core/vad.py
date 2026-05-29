@@ -146,6 +146,17 @@ class SileroVAD:
 
     # ── Utterance collection ──────────────────────────────────────────────────
 
+    def drain_queue(self) -> int:
+        """Discard all currently queued chunks. Returns number of chunks dropped."""
+        dropped = 0
+        while True:
+            try:
+                self._queue.get_nowait()
+                dropped += 1
+            except queue.Empty:
+                break
+        return dropped
+
     def collect_utterance(
         self,
         max_silence_chunks: int = 20,
@@ -154,13 +165,14 @@ class SileroVAD:
     ) -> np.ndarray:
         """
         Accumulate chunks until end of speech.
-        Starts when min_speech_chunks consecutive speech frames are detected.
-        Stops after max_silence_chunks consecutive silent frames post-speech.
+        Starts collecting once any speech is detected.
+        Stops after max_silence_chunks silent frames after speech started.
+        min_speech_chunks is kept for API compatibility but no longer blocks exit —
+        the _loop filter (min_samples) handles very short bursts.
         """
         buf:        list[np.ndarray] = []
         started     = False
         silence_cnt = 0
-        speech_cnt  = 0
 
         while self._running:
             if stop_event is not None and stop_event.is_set():
@@ -168,22 +180,22 @@ class SileroVAD:
             try:
                 chunk = self._queue.get(timeout=0.3)
             except queue.Empty:
-                if started and silence_cnt >= max_silence_chunks:
+                # If we've started collecting and hit queue drought → end of utterance
+                if started:
                     break
                 continue
 
-            prob     = self._speech_probability(chunk)
+            prob      = self._speech_probability(chunk)
             is_speech = prob >= self.threshold
 
             if is_speech:
                 started     = True
                 silence_cnt = 0
-                speech_cnt += 1
                 buf.append(chunk)
             elif started:
                 silence_cnt += 1
                 buf.append(chunk)
-                if silence_cnt >= max_silence_chunks and speech_cnt >= min_speech_chunks:
+                if silence_cnt >= max_silence_chunks:
                     break
 
         return np.concatenate(buf) if buf else np.array([], dtype=np.float32)
@@ -232,8 +244,16 @@ class VADListener:
                 )
                 if rms < min_rms:
                     logger.log_system(f"VAD пропуск — слишком тихо (RMS={rms:.4f} < {min_rms})")
+                    # Drain stale chunks accumulated in queue during quiet skip
+                    self.vad.drain_queue()
                     continue
                 self.on_utterance(audio)
+                # Drain audio that piled up in queue while handler was running.
+                # Without this, stale mic data creates immediate false utterances
+                # ("Оно ровно." style) right after a real command finishes.
+                dropped = self.vad.drain_queue()
+                if dropped:
+                    logger.log_system(f"VAD drain: {dropped} stale chunks сброшено")
 
         self.vad.stop_stream()
 

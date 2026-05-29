@@ -1,8 +1,6 @@
 ﻿from __future__ import annotations
 
 import subprocess
-import threading
-import time
 import urllib.parse
 
 from core import audio_catalog
@@ -31,9 +29,6 @@ def handle(arg: str, original_text: str = "") -> None:
         audio_catalog.play_key("error_unknown")
         return
 
-    # Randomly pick audio_04 ("Выполняю. Займет пару секунд") or audio_14 ("Ищу информацию...")
-    audio_catalog.play_key_random("search_start_a", "search_start_b", block=False)
-
     url = "https://www.google.com/search?q=" + urllib.parse.quote(query)
     try:
         subprocess.Popen(["cmd", "/c", "start", "", url], shell=False)
@@ -47,9 +42,9 @@ def handle(arg: str, original_text: str = "") -> None:
     except Exception:
         pass
 
-    # After browser opens, randomly pick audio_15 or audio_16 with 0.5s delay
-    def _play_done() -> None:
-        time.sleep(0.5)
-        audio_catalog.play_key_random("search_done_a", "search_done_b", block=False)
-
-    threading.Thread(target=_play_done, name="search-audio-done", daemon=True).start()
+    # 10% chance, rotates через все 4 варианта: audio_04 → audio_14 → audio_15 → audio_16 → …
+    audio_catalog.maybe_play(
+        "search",
+        "search_start_a", "search_start_b", "search_done_a", "search_done_b",
+        block=False,
+    )

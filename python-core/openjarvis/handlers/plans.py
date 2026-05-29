@@ -31,12 +31,7 @@ def handle(arg: str, original_text: str = "") -> None:
     if notes:
         lines = [row[0] for row in notes]
         ov.show_text("Напоминания:\n" + "\n".join(lines), auto_hide_ms=6000, tag="ПАМЯТЬ")
-        if _is_recall(original):
-            audio_catalog.play_key("plans_recall", block=False)    # audio_11: "Вот все о чем вы меня просили напомнить"
-        elif _is_schedule(original):
-            audio_catalog.play_key("plans_schedule", block=False)  # audio_10: "Проверил ваше расписание"
-        else:
-            audio_catalog.play_key("plans_list", block=False)      # audio_09: "Напоминания найдены"
+        # 10% chance, rotates через все три варианта: audio_11 → audio_10 → audio_09 → …
+        audio_catalog.maybe_play("plans", "plans_recall", "plans_schedule", "plans_list", block=False)
     else:
         ov.show_text("Напоминаний пока нет", tag="ПАМЯТЬ", auto_hide_ms=6000)
-        audio_catalog.play_key("error_unknown")

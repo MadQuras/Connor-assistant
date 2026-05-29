@@ -1,5 +1,6 @@
 ﻿from __future__ import annotations
 
+import re
 import threading
 import time
 from pathlib import Path
@@ -16,6 +17,27 @@ if TYPE_CHECKING:
     import numpy as np
 
 _TEST_FILE = MODELS_DIR / "test_cmd.txt"
+
+# Wake-word prefixes that may precede an inline command.
+# "Коннор, открой музыку" → "открой музыку"
+_WAKE_PREFIX_RE = re.compile(
+    r"^(коннор|конор|конер|конне|конно|коно|гонор|кано|канор|ко[\-\s]нор|"
+    r"кон[\-\s]нор|connor|conner|cannor|conor|кон|кoн)"
+    r"[\s,\.\-!?:;]*",
+    re.IGNORECASE,
+)
+
+
+def _strip_wake_word(text: str) -> str:
+    """
+    Remove the leading wake word from an utterance and return
+    the remainder (stripped).  Returns '' if only the wake word
+    was spoken.
+    """
+    m = _WAKE_PREFIX_RE.match(text.strip())
+    if m:
+        return text[m.end():].strip()
+    return ""
 
 
 class VoicePipeline:
@@ -180,7 +202,7 @@ class VoicePipeline:
                     tag="СИСТЕМА",
                 )
                 try:
-                    audio_catalog.play_key("error_unknown")
+                    audio_catalog.play_key("error_unknown", block=False)
                 except Exception:
                     pass
                 self.fsm.on_empty_transcription()
@@ -193,7 +215,7 @@ class VoicePipeline:
             self.overlay.show_text("Перехожу в режим ожидания. Зовите когда понадоблюсь", tag="СИСТЕМА")
             logger.log_system("Sleep команда")
             try:
-                audio_catalog.play_key("sleep")
+                audio_catalog.play_key("sleep", block=False)
             except Exception:
                 pass
             return
@@ -204,7 +226,11 @@ class VoicePipeline:
             matched = is_wake(text)
             logger.log_wake(text, matched)
             if matched:
-                self._on_wake()
+                inline = _strip_wake_word(text)
+                self._on_wake(silent=bool(inline))
+                if inline:
+                    logger.log_system(f"Инлайн-команда: {inline!r}")
+                    self._on_command(inline)
             else:
                 logger.log_system(f"Wake не совпал для: {text!r}")
             return
@@ -215,20 +241,21 @@ class VoicePipeline:
 
     # ── Wake ──────────────────────────────────────────────────────────────────
 
-    def _on_wake(self) -> None:
+    def _on_wake(self, silent: bool = False) -> None:
         import random
         self.fsm.on_wake()
         self.memory.increment_wake_count()
 
-        # Always show brief text acknowledgement
-        self.overlay.show_text("Да, лейтенант", tag="КОННОР", auto_hide_ms=6000)
+        if not silent:
+            # Only show acknowledgement text when no inline command follows
+            self.overlay.show_text("Да, лейтенант", tag="КОННОР", auto_hide_ms=6000)
 
-        # Play a random wake audio phrase with 10% probability
-        if random.random() < 0.10:
-            try:
-                audio_catalog.play_key("wake")
-            except Exception:
-                pass
+            # Play a random wake audio phrase with 10% probability
+            if random.random() < 0.10:
+                try:
+                    audio_catalog.play_key("wake")
+                except Exception:
+                    pass
 
         self.fsm.set_listening()
 
@@ -247,7 +274,7 @@ class VoicePipeline:
                 logger.log_error(f"Handler {cat}: {exc}")
                 self.overlay.show_text("Произошла ошибка. Повторите команду")
                 try:
-                    audio_catalog.play_key("error_unknown")
+                    audio_catalog.play_key("error_unknown", block=False)
                 except Exception:
                     pass
         finally:

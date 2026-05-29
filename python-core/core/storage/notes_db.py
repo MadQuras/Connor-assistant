@@ -56,3 +56,19 @@ class NotesDB:
         conn.execute("UPDATE notes SET done = 1 WHERE id = ?", (note_id,))
         conn.commit()
         conn.close()
+
+    def delete(self, note_id: int) -> None:
+        conn = self._conn()
+        conn.execute("DELETE FROM notes WHERE id = ?", (note_id,))
+        conn.commit()
+        conn.close()
+
+    def list_all(self, limit: int = 60) -> List[Tuple[int, str, str, int]]:
+        """Returns (id, text, created_at, done) ordered newest-first."""
+        conn = self._conn()
+        rows = conn.execute(
+            "SELECT id, text, created_at, done FROM notes ORDER BY id DESC LIMIT ?",
+            (limit,),
+        ).fetchall()
+        conn.close()
+        return [(int(r[0]), str(r[1]), str(r[2]), int(r[3])) for r in rows]

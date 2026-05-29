@@ -27,6 +27,35 @@ struct Note {
     id: i64,
     text: String,
     created_at: String,
+    done: i64,
+}
+
+/// Helper: run a short Python script against the notes DB.
+/// Passes db_path as sys.argv[1], optional extra arg as sys.argv[2].
+fn py_sqlite(script: &str, extra_args: &[&str]) -> Result<String, String> {
+    let db_path = project_root()
+        .join("python-core")
+        .join("models")
+        .join("notes.db");
+    let mut base = vec![db_path.to_str().unwrap_or("")];
+    base.extend_from_slice(extra_args);
+
+    let run = |prog: &str| {
+        Command::new(prog)
+            .args(["-c", script])
+            .args(&base)
+            .output()
+    };
+
+    let out = run("py")
+        .or_else(|_| run("python3"))
+        .or_else(|_| run("python"))
+        .map_err(|e| e.to_string())?;
+
+    if !out.status.success() {
+        return Err(String::from_utf8_lossy(&out.stderr).to_string());
+    }
+    Ok(String::from_utf8_lossy(&out.stdout).trim().to_string())
 }
 
 fn project_root() -> PathBuf {
@@ -182,36 +211,46 @@ fn read_notes() -> Result<Vec<Note>, String> {
     if !db_path.exists() {
         return Ok(vec![]);
     }
-    // Read via Python since we don't link rusqlite; dump JSON from SQLite
-    let out = Command::new("py")
-        .args([
-            "-3.11",
-            "-c",
-            "import sqlite3,json,sys; \
-             c=sqlite3.connect(sys.argv[1]); \
-             rows=c.execute('SELECT id,text,created_at FROM notes ORDER BY id DESC LIMIT 50').fetchall(); \
-             print(json.dumps([{'id':r[0],'text':r[1],'created_at':r[2] or ''} for r in rows]))",
-            db_path.to_str().unwrap_or(""),
-        ])
-        .output()
-        .or_else(|_| {
-            Command::new("python")
-                .args([
-                    "-c",
-                    "import sqlite3,json,sys; \
-                     c=sqlite3.connect(sys.argv[1]); \
-                     rows=c.execute('SELECT id,text,created_at FROM notes ORDER BY id DESC LIMIT 50').fetchall(); \
-                     print(json.dumps([{'id':r[0],'text':r[1],'created_at':r[2] or ''} for r in rows]))",
-                    db_path.to_str().unwrap_or(""),
-                ])
-                .output()
-        })
-        .map_err(|e| e.to_string())?;
-    if !out.status.success() {
+    let script = "import sqlite3,json,sys; \
+        c=sqlite3.connect(sys.argv[1]); \
+        rows=c.execute('SELECT id,text,created_at,done FROM notes ORDER BY id DESC LIMIT 60').fetchall(); \
+        print(json.dumps([{'id':r[0],'text':r[1],'created_at':r[2] or '','done':r[3]} for r in rows]))";
+    let raw = py_sqlite(script, &[])?;
+    if raw.is_empty() {
         return Ok(vec![]);
     }
-    let s = String::from_utf8_lossy(&out.stdout);
-    serde_json::from_str(s.trim()).map_err(|e| e.to_string())
+    serde_json::from_str(&raw).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn add_note(text: String) -> Result<(), String> {
+    let script = "import sqlite3,sys; from datetime import datetime; \
+        c=sqlite3.connect(sys.argv[1]); \
+        c.execute('INSERT INTO notes (text,created_at,done) VALUES (?,?,0)', \
+                  (sys.argv[2], datetime.now().isoformat())); \
+        c.commit()";
+    py_sqlite(script, &[text.as_str()])?;
+    Ok(())
+}
+
+#[tauri::command]
+fn delete_note(id: i64) -> Result<(), String> {
+    let script = "import sqlite3,sys; \
+        c=sqlite3.connect(sys.argv[1]); \
+        c.execute('DELETE FROM notes WHERE id=?', (int(sys.argv[2]),)); \
+        c.commit()";
+    py_sqlite(script, &[&id.to_string()])?;
+    Ok(())
+}
+
+#[tauri::command]
+fn mark_note_done(id: i64) -> Result<(), String> {
+    let script = "import sqlite3,sys; \
+        c=sqlite3.connect(sys.argv[1]); \
+        c.execute('UPDATE notes SET done=1 WHERE id=?', (int(sys.argv[2]),)); \
+        c.commit()";
+    py_sqlite(script, &[&id.to_string()])?;
+    Ok(())
 }
 
 #[tauri::command]
@@ -236,6 +275,9 @@ pub fn run() {
             start_python_core,
             read_memory,
             read_notes,
+            add_note,
+            delete_note,
+            mark_note_done,
             read_logs,
             test_command,
             check_python_ready

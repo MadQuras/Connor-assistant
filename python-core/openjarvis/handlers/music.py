@@ -23,18 +23,35 @@ def handle(arg: str, original_text: str = "") -> None:
     ov = get_overlay()
     player = get_player()
 
-    # Navigation / playback controls — handled by central response, no specific audio
-    if any(x in text for x in ("следующ", "next", "дальше")):
+    # Navigation / playback controls
+    if any(x in text for x in (
+        "следующ", "next", "дальше", "след трек", "следующий",
+        "следующую", "следующая", "вперёд", "вперед",
+    )):
         ov.show_text("Следующий трек")
         player.next_track()
         return
 
-    if any(x in text for x in ("пауз", "pause", "стоп", "stop")):
+    if any(x in text for x in (
+        "возобнов", "продолжи", "продолжай", "продолжать", "продолжить",
+        "resume", "unpause", "play",
+    )):
+        ov.show_text("Воспроизведение")
+        player.play_pause()
+        return
+
+    if any(x in text for x in (
+        "пауз", "pause", "стоп", "stop", "останови", "останов",
+        "прерви", "поставь на паузу",
+    )):
         ov.show_text("Пауза")
         player.play_pause()
         return
 
-    if any(x in text for x in ("предыдущ", "prev", "назад")):
+    if any(x in text for x in (
+        "предыдущ", "prev", "назад", "пред трек", "предыдущий",
+        "предыдущую", "предыдущая",
+    )):
         ov.show_text("Предыдущий трек")
         player.prev_track()
         return
@@ -48,17 +65,16 @@ def handle(arg: str, original_text: str = "") -> None:
                 q = f"{item['title']} {item['artist']}"
                 ov.show_text(f"Ищу: {item['title']}")
                 player.search_and_play(q)
-                audio_catalog.play_key("music_open_player", block=False)  # audio_21: "Запускаю плеер..."
-                audio_catalog.play_key("music_playing", block=False)       # audio_24: "Воспроизведение запущено..."
+                # 10% chance, rotates: audio_21 → audio_24 → audio_21 → …
+                audio_catalog.maybe_play("music_track", "music_open_player", "music_playing", block=False)
                 return
         ov.show_text(f"Ищу трек: {text}")
         player.search_and_play(text)
-        audio_catalog.play_key("music_open_player", block=False)  # audio_21
-        audio_catalog.play_key("music_playing", block=False)       # audio_24
+        audio_catalog.maybe_play("music_track", "music_open_player", "music_playing", block=False)
         return
 
     # "открой музыку" — open Lune without specific track
     ov.show_text(audio_catalog.phrase("commands", "audio_05.wav") or "Включаю музыку")
     player.play_pause()
-    audio_catalog.play_key("app_done", block=False)    # audio_05: "Готово. Приложение запущено"
-    audio_catalog.play_music_browse()                  # alternates audio_22 / audio_23
+    # 10% chance, rotates: audio_05 → audio_22 → audio_23 → audio_05 → …
+    audio_catalog.maybe_play("music_open", "app_done", "music_open_browse_a", "music_open_browse_b", block=False)
