@@ -3,27 +3,30 @@ from __future__ import annotations
 """
 Lune desktop music player controller.
 
-play/pause  → WM_APPCOMMAND posted to the Lune window (Chromium handles it
-              natively; no focus/privilege requirements).
+KEY INSIGHT (from reading Lune's source code):
+  - Lune does NOT register globalShortcut for media keys
+  - Lune does NOT use navigator.mediaSession for next/prev
+  - The ONLY way to trigger next/prev is via Electron IPC 'tray-action'
 
-next/prev   → PowerShell .ps1 helper that calls keybd_event() via C# P/Invoke.
-              PowerShell.exe is a real UI-desktop process, so its keybd_event
-              reaches the global input queue — unlike pythonw.exe (headless,
-              background) whose SendInput/keybd_event are silently blocked by
-              Windows on some systems.
+STRATEGY:
+  play/pause  → WM_APPCOMMAND (Chromium handles it natively for <audio> elements)
+  next/prev   → Chrome DevTools Protocol (CDP): find and click the button in DOM
 
-The PS1 files are written once to %TEMP% on first use and re-used afterwards.
+Lune must be launched with --remote-debugging-port=9222.
+If it's already running without that flag, we kill it and relaunch.
 """
 
 import ctypes
 import ctypes.wintypes
+import json
 import subprocess
-import tempfile
 import time
 from pathlib import Path
 
 import pyautogui
 import pygetwindow as gw  # type: ignore
+import requests
+import websocket  # type: ignore  (websocket-client)
 from core import logger
 
 _LUNE_EXE = r"C:\Users\CompX\AppData\Local\Programs\Lune\Lune.exe"
@@ -31,9 +34,10 @@ _LUNE_LNK = (
     r"C:\Users\CompX\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\Lune.lnk"
 )
 _LUNE_TITLE = "Lune"
+_CDP_PORT   = 9222
 
 pyautogui.FAILSAFE = False
-pyautogui.PAUSE = 0.05
+pyautogui.PAUSE    = 0.05
 
 WM_APPCOMMAND               = 0x0319
 APPCOMMAND_MEDIA_PLAY_PAUSE = 14
@@ -41,100 +45,84 @@ HWND_BROADCAST              = 0xFFFF
 
 _user32 = ctypes.windll.user32
 
-# ── PowerShell helper scripts ────────────────────────────────────────────────
-# Template: C# class compiled once per PS session via Add-Type, calls
-# keybd_event() with KEYEVENTF_EXTENDEDKEY from a proper UI process.
+# JavaScript executed in Lune's renderer to trigger next/prev.
+# Tries several strategies: title attr → aria-label → positional fallback
+_JS_CLICK = """
+(function(action) {
+  // 1. Try by title attribute (if Lune adds them)
+  var sel = action === 'next'
+    ? '[title*="Next"],[title*="next"],[title*="Следующий"],[aria-label*="next"],[aria-label*="Next"]'
+    : '[title*="Prev"],[title*="prev"],[title*="Previous"],[title*="Предыдущий"],[aria-label*="prev"],[aria-label*="Prev"]';
+  var btn = document.querySelector(sel);
+  if (btn) { btn.click(); return 'by-attr'; }
 
-_PS_COMPILE = r"""
-$dll = "$env:TEMP\ConnorMedia.dll"
-if (!(Test-Path $dll)) {
-    Add-Type -TypeDefinition @"
-using System.Runtime.InteropServices;
-public class ConnorMedia {
-    [DllImport(`"user32.dll`")]
-    public static extern void keybd_event(byte vk, byte scan, uint flags, int extra);
-}
-"@ -Language CSharp -OutputAssembly $dll
-}
+  // 2. Positional: player control buttons are ordered
+  //    [shuffle][prev][play/pause][next][loop]
+  //    Find them by looking for the biggest cluster of sibling buttons
+  var allBtns = Array.from(document.querySelectorAll('button'));
+  // Find play/pause by checking which button has two different SVG states
+  // (it's the tallest/widest control button in the cluster)
+  // Instead: walk from the play/pause area.
+  // The play/pause button is near center; find it by looking at button widths.
+  // Heuristic: sort by vertical position (bottom of page = player bar),
+  // then find groups of 5 consecutive buttons.
+  var byY = allBtns
+    .map(function(b) { var r = b.getBoundingClientRect(); return {b:b, y:r.top, x:r.left}; })
+    .filter(function(o) { return o.y > window.innerHeight * 0.7; }) // bottom 30%
+    .sort(function(a,b) { return a.x - b.x; });
+
+  if (byY.length >= 4) {
+    // Heuristic: prev is index 1, next is index 3 in the bottom row
+    var idx = action === 'next' ? 3 : 1;
+    if (byY[idx]) { byY[idx].b.click(); return 'by-pos-' + idx; }
+  }
+  return 'not-found';
+})('{ACTION}')
 """
 
-_PS_TEMPLATE = r"""
-$dll = "$env:TEMP\ConnorMedia.dll"
-if (Test-Path $dll) {
-    try { Add-Type -Path $dll -ErrorAction Stop } catch {}
-} else {
-    Add-Type -TypeDefinition @"
-using System.Runtime.InteropServices;
-public class ConnorMedia {
-    [DllImport(`"user32.dll`")]
-    public static extern void keybd_event(byte vk, byte scan, uint flags, int extra);
-}
-"@ -Language CSharp -OutputAssembly $dll -ErrorAction SilentlyContinue
-    Add-Type -Path $dll
-}
-[ConnorMedia]::keybd_event({VK}, 0, 0x0001, 0)
-[System.Threading.Thread]::Sleep(80)
-[ConnorMedia]::keybd_event({VK}, 0, 0x0003, 0)
-"""
 
-_VK_NEXT  = 0xB0   # VK_MEDIA_NEXT_TRACK
-_VK_PREV  = 0xB1   # VK_MEDIA_PREV_TRACK
-_VK_PLAY  = 0xB3   # VK_MEDIA_PLAY_PAUSE
+# ── CDP helpers ────────────────────────────────────────────────────────────────
 
-_TMPDIR = Path(tempfile.gettempdir())
-_PS_NEXT = _TMPDIR / "connor_media_next.ps1"
-_PS_PREV = _TMPDIR / "connor_media_prev.ps1"
-_PS_PLAY = _TMPDIR / "connor_media_play.ps1"
-
-
-_PS_PRECOMPILE = _TMPDIR / "connor_media_precompile.ps1"
-
-
-def _ensure_scripts() -> None:
-    """Write PS1 helpers to temp dir and pre-compile the helper DLL (idempotent)."""
-    for path, vk in [(_PS_NEXT, _VK_NEXT), (_PS_PREV, _VK_PREV), (_PS_PLAY, _VK_PLAY)]:
-        if not path.exists():
-            path.write_text(
-                _PS_TEMPLATE.replace("{VK}", hex(vk)),
-                encoding="utf-8",
-            )
-    # Pre-compile ConnorMedia.dll so first keybd_event call is fast (~400ms not ~2s)
-    dll = _TMPDIR / "ConnorMedia.dll"
-    if not dll.exists() and not _PS_PRECOMPILE.exists():
-        _PS_PRECOMPILE.write_text(_PS_COMPILE, encoding="utf-8")
-        subprocess.Popen(
-            [
-                "powershell", "-NoProfile", "-NonInteractive",
-                "-WindowStyle", "Hidden", "-ExecutionPolicy", "Bypass",
-                "-File", str(_PS_PRECOMPILE),
-            ],
-            creationflags=subprocess.CREATE_NO_WINDOW,
-        )
-
-
-_ensure_scripts()
-
-
-def _run_ps(ps_path: Path) -> None:
-    """
-    Launch a PowerShell script asynchronously (fire-and-forget).
-    We use Popen (non-blocking) so the VAD thread is not stalled.
-    """
+def _cdp_available() -> bool:
     try:
-        subprocess.Popen(
-            [
-                "powershell",
-                "-NoProfile",
-                "-NonInteractive",
-                "-WindowStyle", "Hidden",
-                "-ExecutionPolicy", "Bypass",
-                "-File", str(ps_path),
-            ],
-            creationflags=subprocess.CREATE_NO_WINDOW,
-        )
-        logger.log_system(f"[Lune] PS key via {ps_path.name}")
+        requests.get(f"http://localhost:{_CDP_PORT}/json", timeout=1)
+        return True
+    except Exception:
+        return False
+
+
+def _cdp_eval(js: str) -> str | None:
+    """Execute JS in Lune's renderer. Returns result as string or None on error."""
+    try:
+        resp = requests.get(f"http://localhost:{_CDP_PORT}/json", timeout=2)
+        targets = resp.json()
+        page = next((t for t in targets if t.get("type") == "page"), None)
+        if not page:
+            logger.log_system("[Lune] CDP: no page target found")
+            return None
+        ws_url = page["webSocketDebuggerUrl"]
+        ws = websocket.create_connection(ws_url, timeout=3)
+        ws.send(json.dumps({
+            "id": 1,
+            "method": "Runtime.evaluate",
+            "params": {"expression": js, "returnByValue": True},
+        }))
+        raw = ws.recv()
+        ws.close()
+        result = json.loads(raw)
+        val = result.get("result", {}).get("result", {}).get("value")
+        logger.log_system(f"[Lune] CDP eval result: {val!r}")
+        return str(val) if val is not None else None
     except Exception as exc:
-        logger.log_system(f"[Lune] PS launch failed: {exc}")
+        logger.log_system(f"[Lune] CDP error: {exc}")
+        return None
+
+
+def _cdp_action(action: str) -> bool:
+    """Trigger 'next' or 'previous' in Lune via CDP DOM click."""
+    js = _JS_CLICK.replace("{ACTION}", action)
+    result = _cdp_eval(js)
+    return result is not None and result != "not-found"
 
 
 # ── WM_APPCOMMAND for play/pause ─────────────────────────────────────────────
@@ -162,12 +150,23 @@ def _appcommand_play_pause() -> None:
         logger.log_system(f"[Lune] WM_APPCOMMAND play/pause hwnd={hwnd} ret={ret}")
         if ret:
             return
-    # Broadcast fallback
     _user32.SendMessageW(HWND_BROADCAST, WM_APPCOMMAND, 0, lparam)
     logger.log_system("[Lune] WM_APPCOMMAND play/pause broadcast")
 
 
 # ── Window helpers ────────────────────────────────────────────────────────────
+
+def _kill_lune() -> None:
+    """Kill Lune process(es) by name."""
+    try:
+        subprocess.run(
+            ["taskkill", "/F", "/IM", "Lune.exe"],
+            capture_output=True, timeout=5,
+        )
+        time.sleep(0.5)
+    except Exception:
+        pass
+
 
 def _is_running() -> bool:
     try:
@@ -177,17 +176,25 @@ def _is_running() -> bool:
         return False
 
 
-def _launch() -> bool:
+def _launch(with_cdp: bool = True) -> bool:
+    """Launch Lune, optionally with Chrome remote debugging enabled."""
     exe = Path(_LUNE_EXE)
-    if not exe.exists():
-        subprocess.Popen(["cmd", "/c", "start", "", _LUNE_LNK], shell=False)
-    else:
-        subprocess.Popen([str(exe)])
+    cdp_flag = f"--remote-debugging-port={_CDP_PORT}"
 
-    deadline = time.time() + 5.0
+    if exe.exists():
+        cmd = [str(exe), cdp_flag] if with_cdp else [str(exe)]
+        subprocess.Popen(cmd)
+    else:
+        # .lnk launch can't pass flags — launch exe directly from the LNK target
+        subprocess.Popen(["cmd", "/c", "start", "", _LUNE_LNK], shell=False)
+        with_cdp = False  # can't guarantee CDP when using .lnk
+
+    deadline = time.time() + 6.0
     while time.time() < deadline:
-        time.sleep(0.3)
+        time.sleep(0.4)
         if _is_running():
+            if with_cdp:
+                time.sleep(1.0)  # allow Electron to start debug server
             return True
     return False
 
@@ -209,19 +216,25 @@ def _focus() -> bool:
 
 class LuneMusicPlayer:
     """
-    Controls Lune via OS media keys.
+    Controls Lune via the two available external mechanisms:
 
-    play/pause  → WM_APPCOMMAND (reliable for Electron/Chromium, no focus needed)
-    next/prev   → PowerShell keybd_event helper (runs in a proper UI process)
+    play/pause  → WM_APPCOMMAND (Chromium built-in <audio> control)
+    next/prev   → Chrome DevTools Protocol, executing JS to click the DOM button
 
-    pause() and resume() both send play/pause toggle — tracking internal state
-    would desync when the user manually controls Lune, so we don't bother.
+    Lune is launched with --remote-debugging-port=9222 so CDP is available.
+    If Lune is already running without that flag, it is restarted.
     """
 
     def ensure_open(self) -> bool:
         if _is_running():
+            if not _cdp_available():
+                # Lune is running but without CDP — restart it
+                logger.log_system("[Lune] restarting with --remote-debugging-port")
+                _kill_lune()
+                time.sleep(0.8)
+                return _launch(with_cdp=True)
             return True
-        return _launch()
+        return _launch(with_cdp=True)
 
     def play_pause(self) -> None:
         self.ensure_open()
@@ -237,11 +250,13 @@ class LuneMusicPlayer:
 
     def next_track(self) -> None:
         self.ensure_open()
-        _run_ps(_PS_NEXT)
+        if not _cdp_action("next"):
+            logger.log_system("[Lune] CDP next failed — no button found")
 
     def prev_track(self) -> None:
         self.ensure_open()
-        _run_ps(_PS_PREV)
+        if not _cdp_action("prev"):
+            logger.log_system("[Lune] CDP prev failed — no button found")
 
     def search_and_play(self, query: str) -> bool:
         if not self.ensure_open():
