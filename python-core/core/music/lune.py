@@ -3,16 +3,20 @@ from __future__ import annotations
 """
 Lune desktop music player controller.
 
-Media keys are sent via ctypes SendInput with KEYEVENTF_EXTENDEDKEY — the
-only reliable method for VK_MEDIA_* codes (0xB0-0xB3) on Windows.
+Media commands are sent via WM_APPCOMMAND — a dedicated Windows message
+for media control that Electron/Chromium handles natively regardless of
+window focus or privilege level.  SendInput / keybd_event require the
+target window to be in the foreground and can fail under UIPI; WM_APPCOMMAND
+does not have these restrictions.
 
-State tracking for pause/resume is intentionally removed: syncing internal
-state with user-initiated play/pause is error-prone.  Both pause() and
-resume() always send the toggle key and let the overlay text communicate
-Connor's intent.
+Strategy (three layers, first success wins):
+  1. PostMessage WM_APPCOMMAND to the Lune window directly
+  2. SendMessage WM_APPCOMMAND broadcast (HWND_BROADCAST)
+  3. pyautogui media key (last resort)
 """
 
 import ctypes
+import ctypes.wintypes
 import subprocess
 import time
 from pathlib import Path
@@ -30,75 +34,70 @@ _LUNE_TITLE = "Lune"
 pyautogui.FAILSAFE = False
 pyautogui.PAUSE = 0.05
 
-# Windows virtual key codes for media control (all are "extended keys")
-_VK_NEXT_TRACK  = 0xB0
-_VK_PREV_TRACK  = 0xB1
-_VK_PLAY_PAUSE  = 0xB3
+# WM_APPCOMMAND codes for media control
+WM_APPCOMMAND            = 0x0319
+APPCOMMAND_MEDIA_NEXTTRACK    = 11
+APPCOMMAND_MEDIA_PREVIOUSTRACK = 12
+APPCOMMAND_MEDIA_PLAY_PAUSE   = 14
+HWND_BROADCAST           = 0xFFFF
 
-# ctypes structures for SendInput
-INPUT_KEYBOARD       = 1
-KEYEVENTF_EXTENDEDKEY = 0x0001
-KEYEVENTF_KEYUP       = 0x0002
-
-
-class _KEYBDINPUT(ctypes.Structure):
-    _fields_ = [
-        ("wVk",         ctypes.c_ushort),
-        ("wScan",       ctypes.c_ushort),
-        ("dwFlags",     ctypes.c_ulong),
-        ("time",        ctypes.c_ulong),
-        ("dwExtraInfo", ctypes.c_ulong),
-    ]
+_user32 = ctypes.windll.user32
 
 
-class _INPUT(ctypes.Structure):
-    _fields_ = [
-        ("type", ctypes.c_ulong),
-        ("ki",   _KEYBDINPUT),
-        # pad to cover the union (INPUT is 28 bytes on 32-bit, 40 on 64-bit)
-        ("_pad", ctypes.c_byte * 8),
-    ]
+def _find_lune_hwnd() -> int:
+    """Return the HWND of the first Lune window, or 0 if not found."""
+    found: list[int] = []
+
+    EnumWindowsProc = ctypes.WINFUNCTYPE(
+        ctypes.wintypes.BOOL,
+        ctypes.wintypes.HWND,
+        ctypes.wintypes.LPARAM,
+    )
+
+    def _cb(hwnd: int, _: int) -> bool:
+        buf = ctypes.create_unicode_buffer(256)
+        _user32.GetWindowTextW(hwnd, buf, 256)
+        if _LUNE_TITLE in buf.value:
+            found.append(hwnd)
+        return True
+
+    _user32.EnumWindows(EnumWindowsProc(_cb), 0)
+    return found[0] if found else 0
 
 
-def _make_key_input(vk: int, flags: int) -> _INPUT:
-    inp = _INPUT()
-    inp.type     = INPUT_KEYBOARD
-    inp.ki.wVk   = vk
-    inp.ki.wScan = 0
-    inp.ki.dwFlags = flags
-    inp.ki.time  = 0
-    inp.ki.dwExtraInfo = 0
-    return inp
-
-
-def _media_key(vk_code: int) -> None:
+def _send_appcommand(cmd: int) -> None:
     """
-    Send a global media key press via ctypes SendInput (KEYEVENTF_EXTENDEDKEY).
-    Media VK codes (0xB0-0xB3) require the extended-key flag to be recognised
-    by SMTC-connected apps like Lune on modern Windows.
-    Falls back to pyautogui if ctypes fails.
+    Send WM_APPCOMMAND to Lune's window directly, then fall back to broadcast,
+    then pyautogui.  Logs result so we can diagnose from logs.jsonl.
     """
+    _KEY_FALLBACK = {
+        APPCOMMAND_MEDIA_NEXTTRACK:     "nexttrack",
+        APPCOMMAND_MEDIA_PREVIOUSTRACK: "prevtrack",
+        APPCOMMAND_MEDIA_PLAY_PAUSE:    "playpause",
+    }
+    lparam = cmd << 16
+
+    # Layer 1 — post directly to Lune window
+    hwnd = _find_lune_hwnd()
+    if hwnd:
+        ret = _user32.PostMessageW(hwnd, WM_APPCOMMAND, hwnd, lparam)
+        logger.log_system(f"[Lune] PostMessage cmd={cmd} hwnd={hwnd} ret={ret}")
+        if ret:
+            return
+
+    # Layer 2 — broadcast
+    ret2 = _user32.SendMessageW(HWND_BROADCAST, WM_APPCOMMAND, 0, lparam)
+    logger.log_system(f"[Lune] Broadcast WM_APPCOMMAND cmd={cmd} ret={ret2}")
+    if ret2:
+        return
+
+    # Layer 3 — pyautogui (physical key simulation)
+    key = _KEY_FALLBACK.get(cmd, "playpause")
+    logger.log_system(f"[Lune] pyautogui fallback key={key!r}")
     try:
-        down = _make_key_input(vk_code, KEYEVENTF_EXTENDEDKEY)
-        up   = _make_key_input(vk_code, KEYEVENTF_EXTENDEDKEY | KEYEVENTF_KEYUP)
-        user32 = ctypes.windll.user32
-        sent_d = user32.SendInput(1, ctypes.byref(down), ctypes.sizeof(_INPUT))
-        time.sleep(0.08)
-        sent_u = user32.SendInput(1, ctypes.byref(up),   ctypes.sizeof(_INPUT))
-        logger.log_system(f"[Lune] SendInput vk={hex(vk_code)} down={sent_d} up={sent_u}")
-        if sent_d == 0 or sent_u == 0:
-            raise RuntimeError("SendInput returned 0")
+        pyautogui.press(key)
     except Exception as exc:
-        logger.log_system(f"[Lune] SendInput failed ({exc}), falling back to pyautogui")
-        _key_map = {
-            _VK_NEXT_TRACK: "nexttrack",
-            _VK_PREV_TRACK: "prevtrack",
-            _VK_PLAY_PAUSE: "playpause",
-        }
-        try:
-            pyautogui.press(_key_map.get(vk_code, "playpause"))
-        except Exception as exc2:
-            logger.log_system(f"[Lune] pyautogui fallback also failed: {exc2}")
+        logger.log_system(f"[Lune] pyautogui also failed: {exc}")
 
 
 # ─── Window helpers ───────────────────────────────────────────────────────────
@@ -157,27 +156,24 @@ class LuneMusicPlayer:
         return _launch()
 
     def play_pause(self) -> None:
-        """Toggle play/pause (used by open-music command)."""
         self.ensure_open()
-        _media_key(_VK_PLAY_PAUSE)
+        _send_appcommand(APPCOMMAND_MEDIA_PLAY_PAUSE)
 
     def pause(self) -> None:
-        """Send play/pause key (pauses if playing, resumes if already paused)."""
         self.ensure_open()
-        _media_key(_VK_PLAY_PAUSE)
+        _send_appcommand(APPCOMMAND_MEDIA_PLAY_PAUSE)
 
     def resume(self) -> None:
-        """Send play/pause key (resumes if paused, pauses if already playing)."""
         self.ensure_open()
-        _media_key(_VK_PLAY_PAUSE)
+        _send_appcommand(APPCOMMAND_MEDIA_PLAY_PAUSE)
 
     def next_track(self) -> None:
         self.ensure_open()
-        _media_key(_VK_NEXT_TRACK)
+        _send_appcommand(APPCOMMAND_MEDIA_NEXTTRACK)
 
     def prev_track(self) -> None:
         self.ensure_open()
-        _media_key(_VK_PREV_TRACK)
+        _send_appcommand(APPCOMMAND_MEDIA_PREVIOUSTRACK)
 
     def search_and_play(self, query: str) -> bool:
         if not self.ensure_open():
