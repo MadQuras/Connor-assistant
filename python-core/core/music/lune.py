@@ -3,9 +3,9 @@ from __future__ import annotations
 """
 Lune desktop music player controller.
 Lune is an Electron/Chromium app — we control it via:
-  - subprocess.Popen to launch it (if not running)
-  - pyautogui media keys for play/pause, next, prev
-  - pygetwindow + pyautogui for search (Ctrl+K / Ctrl+F)
+  - subprocess.Popen to launch it
+  - win32api.keybd_event for media keys (more reliable than pyautogui.press)
+  - Internal _playing state so pause/resume work independently
 """
 
 import subprocess
@@ -19,16 +19,35 @@ _LUNE_EXE = r"C:\Users\CompX\AppData\Local\Programs\Lune\Lune.exe"
 _LUNE_LNK = (
     r"C:\Users\CompX\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\Lune.lnk"
 )
-
-# Window title substring that identifies a Lune window
 _LUNE_TITLE = "Lune"
 
 pyautogui.FAILSAFE = False
 pyautogui.PAUSE = 0.05
 
+# Windows virtual key codes for media control
+_VK_NEXT_TRACK  = 0xB0
+_VK_PREV_TRACK  = 0xB1
+_VK_PLAY_PAUSE  = 0xB3
+
+
+def _media_key(vk_code: int) -> None:
+    """Send a media key via win32api (more reliable than pyautogui for global keys)."""
+    try:
+        import win32api, win32con
+        win32api.keybd_event(vk_code, 0, 0, 0)
+        time.sleep(0.05)
+        win32api.keybd_event(vk_code, 0, win32con.KEYEVENTF_KEYUP, 0)
+    except Exception:
+        # Fallback: pyautogui (may not work for all apps but better than nothing)
+        key_map = {
+            _VK_NEXT_TRACK: "nexttrack",
+            _VK_PREV_TRACK: "prevtrack",
+            _VK_PLAY_PAUSE: "playpause",
+        }
+        pyautogui.press(key_map.get(vk_code, "playpause"))
+
 
 def _is_running() -> bool:
-    """Return True if a Lune window is visible."""
     try:
         wins = gw.getWindowsWithTitle(_LUNE_TITLE)
         return any(w.title for w in wins)
@@ -37,10 +56,8 @@ def _is_running() -> bool:
 
 
 def _launch() -> bool:
-    """Launch Lune and wait up to 5 s for its window to appear."""
     exe = Path(_LUNE_EXE)
     if not exe.exists():
-        # Fallback: open via shortcut
         subprocess.Popen(["cmd", "/c", "start", "", _LUNE_LNK], shell=False)
     else:
         subprocess.Popen([str(exe)])
@@ -54,7 +71,6 @@ def _launch() -> bool:
 
 
 def _focus() -> bool:
-    """Bring Lune window to foreground. Returns True on success."""
     try:
         wins = gw.getWindowsWithTitle(_LUNE_TITLE)
         for w in wins:
@@ -70,43 +86,60 @@ def _focus() -> bool:
 class LuneMusicPlayer:
     """Controls Lune via OS media keys and window activation."""
 
+    # Class-level state: assume playing when Lune is open.
+    # Tracks what WE sent so pause/resume don't toggle back.
+    _playing: bool = True
+
     def ensure_open(self) -> bool:
         if _is_running():
             return True
-        return _launch()
+        launched = _launch()
+        if launched:
+            # Mark as playing since Lune resumes last track on open
+            LuneMusicPlayer._playing = True
+        return launched
 
     def play_pause(self) -> None:
+        """Toggle — used for generic open-music command."""
         self.ensure_open()
-        pyautogui.press("playpause")
+        _media_key(_VK_PLAY_PAUSE)
+        LuneMusicPlayer._playing = not LuneMusicPlayer._playing
+
+    def pause(self) -> None:
+        """Only pause if we believe music is currently playing."""
+        self.ensure_open()
+        if LuneMusicPlayer._playing:
+            _media_key(_VK_PLAY_PAUSE)
+            LuneMusicPlayer._playing = False
+
+    def resume(self) -> None:
+        """Only resume if we believe music is currently paused."""
+        self.ensure_open()
+        if not LuneMusicPlayer._playing:
+            _media_key(_VK_PLAY_PAUSE)
+            LuneMusicPlayer._playing = True
 
     def next_track(self) -> None:
         self.ensure_open()
-        pyautogui.press("nexttrack")
+        _media_key(_VK_NEXT_TRACK)
+        LuneMusicPlayer._playing = True  # playing continues after skip
 
     def prev_track(self) -> None:
         self.ensure_open()
-        pyautogui.press("prevtrack")
+        _media_key(_VK_PREV_TRACK)
+        LuneMusicPlayer._playing = True
 
     def search_and_play(self, query: str) -> bool:
-        """
-        Open Lune, focus it, open search with Ctrl+K, type query, press Enter.
-        Lune uses Ctrl+K as its universal search shortcut (common in Electron music apps).
-        Falls back to Ctrl+F if the first shortcut doesn't open a field within 1 s.
-        """
         if not self.ensure_open():
             return False
-
         time.sleep(0.3)
         _focus()
         time.sleep(0.3)
-
-        # Open search
         pyautogui.hotkey("ctrl", "k")
         time.sleep(0.8)
-
-        # Type query and submit
         pyautogui.typewrite(query, interval=0.04)
         time.sleep(0.3)
         pyautogui.press("enter")
         time.sleep(0.5)
+        LuneMusicPlayer._playing = True
         return True

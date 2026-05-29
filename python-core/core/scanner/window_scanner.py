@@ -36,24 +36,13 @@ def find_window(substring: str) -> Optional[Dict[str, Any]]:
     return None
 
 
-def scan_apps_to_memory() -> None:
-    wins = list_windows()
-    known = {
-        "chrome": ["chrome", "гугл"],
-        "explorer": ["проводник", "explorer"],
-        "discord": ["discord"],
-        "steam": ["steam"],
-        "telegram": ["telegram", "телеграм"],
-        "notepad": ["блокнот", "notepad"],
-        "yandex": ["яндекс", "yandex"],
-    }
-    detected: List[str] = []
-    titles = " | ".join(w["title"].lower() for w in wins)
-    for app, keys in known.items():
-        if any(k in titles for k in keys):
-            detected.append(app)
+def scan_apps_to_memory() -> Dict[str, str]:
+    """
+    Scan Start Menu shortcuts and save {normalised_name: lnk_path} to memory.json.
+    Returns the resulting dict.
+    """
+    from core.system.apps_launcher import scan_start_menu, save_apps_to_memory
 
-    store = MemoryStore()
-    data = store.load()
-    data["apps_cache"] = sorted(set(detected))
-    store.save(data)
+    apps = scan_start_menu()
+    save_apps_to_memory(apps)
+    return apps

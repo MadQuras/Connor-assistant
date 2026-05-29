@@ -37,7 +37,7 @@ def handle(arg: str, original_text: str = "") -> None:
         "resume", "unpause", "play",
     )):
         ov.show_text("Воспроизведение")
-        player.play_pause()
+        player.resume()
         return
 
     if any(x in text for x in (
@@ -45,7 +45,7 @@ def handle(arg: str, original_text: str = "") -> None:
         "прерви", "поставь на паузу",
     )):
         ov.show_text("Пауза")
-        player.play_pause()
+        player.pause()
         return
 
     if any(x in text for x in (

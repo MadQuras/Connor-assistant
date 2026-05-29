@@ -58,6 +58,14 @@ def main() -> None:
 
     def _boot_pipeline() -> None:
         try:
+            # Scan Start Menu shortcuts so launch_app() can find installed apps.
+            # Runs in background so it doesn't block VAD startup.
+            try:
+                from core.scanner.window_scanner import scan_apps_to_memory
+                scan_apps_to_memory()
+            except Exception:
+                pass
+
             pipeline.start()
             pipeline._pipeline_ready.wait(timeout=30)
             _write_flag(True)
