@@ -3,21 +3,22 @@ from __future__ import annotations
 """
 Lune desktop music player controller.
 
-Media commands are sent via WM_APPCOMMAND — a dedicated Windows message
-for media control that Electron/Chromium handles natively regardless of
-window focus or privilege level.  SendInput / keybd_event require the
-target window to be in the foreground and can fail under UIPI; WM_APPCOMMAND
-does not have these restrictions.
+play/pause  → WM_APPCOMMAND posted to the Lune window (Chromium handles it
+              natively; no focus/privilege requirements).
 
-Strategy (three layers, first success wins):
-  1. PostMessage WM_APPCOMMAND to the Lune window directly
-  2. SendMessage WM_APPCOMMAND broadcast (HWND_BROADCAST)
-  3. pyautogui media key (last resort)
+next/prev   → PowerShell .ps1 helper that calls keybd_event() via C# P/Invoke.
+              PowerShell.exe is a real UI-desktop process, so its keybd_event
+              reaches the global input queue — unlike pythonw.exe (headless,
+              background) whose SendInput/keybd_event are silently blocked by
+              Windows on some systems.
+
+The PS1 files are written once to %TEMP% on first use and re-used afterwards.
 """
 
 import ctypes
 import ctypes.wintypes
 import subprocess
+import tempfile
 import time
 from pathlib import Path
 
@@ -34,73 +35,109 @@ _LUNE_TITLE = "Lune"
 pyautogui.FAILSAFE = False
 pyautogui.PAUSE = 0.05
 
-# WM_APPCOMMAND — used for play/pause (Lune handles this natively via Chromium)
-WM_APPCOMMAND                  = 0x0319
-APPCOMMAND_MEDIA_PLAY_PAUSE    = 14
-APPCOMMAND_MEDIA_NEXTTRACK     = 11
-APPCOMMAND_MEDIA_PREVIOUSTRACK = 12
-HWND_BROADCAST                 = 0xFFFF
-
-# SendInput — used for next/prev (Lune registers them as globalShortcut → WM_HOTKEY)
-INPUT_KEYBOARD        = 1
-KEYEVENTF_EXTENDEDKEY = 0x0001
-KEYEVENTF_KEYUP       = 0x0002
-VK_MEDIA_NEXT_TRACK   = 0xB0
-VK_MEDIA_PREV_TRACK   = 0xB1
+WM_APPCOMMAND               = 0x0319
+APPCOMMAND_MEDIA_PLAY_PAUSE = 14
+HWND_BROADCAST              = 0xFFFF
 
 _user32 = ctypes.windll.user32
 
+# ── PowerShell helper scripts ────────────────────────────────────────────────
+# Template: C# class compiled once per PS session via Add-Type, calls
+# keybd_event() with KEYEVENTF_EXTENDEDKEY from a proper UI process.
 
-# ── Correct INPUT structure (64-bit Windows, sizeof = 40) ────────────────────
+_PS_COMPILE = r"""
+$dll = "$env:TEMP\ConnorMedia.dll"
+if (!(Test-Path $dll)) {
+    Add-Type -TypeDefinition @"
+using System.Runtime.InteropServices;
+public class ConnorMedia {
+    [DllImport(`"user32.dll`")]
+    public static extern void keybd_event(byte vk, byte scan, uint flags, int extra);
+}
+"@ -Language CSharp -OutputAssembly $dll
+}
+"""
 
-class _KEYBDINPUT(ctypes.Structure):
-    _fields_ = [
-        ("wVk",         ctypes.c_ushort),
-        ("wScan",       ctypes.c_ushort),
-        ("dwFlags",     ctypes.c_ulong),
-        ("time",        ctypes.c_ulong),
-        ("dwExtraInfo", ctypes.c_void_p),  # ULONG_PTR: 8 bytes on 64-bit
-    ]
+_PS_TEMPLATE = r"""
+$dll = "$env:TEMP\ConnorMedia.dll"
+if (Test-Path $dll) {
+    try { Add-Type -Path $dll -ErrorAction Stop } catch {}
+} else {
+    Add-Type -TypeDefinition @"
+using System.Runtime.InteropServices;
+public class ConnorMedia {
+    [DllImport(`"user32.dll`")]
+    public static extern void keybd_event(byte vk, byte scan, uint flags, int extra);
+}
+"@ -Language CSharp -OutputAssembly $dll -ErrorAction SilentlyContinue
+    Add-Type -Path $dll
+}
+[ConnorMedia]::keybd_event({VK}, 0, 0x0001, 0)
+[System.Threading.Thread]::Sleep(80)
+[ConnorMedia]::keybd_event({VK}, 0, 0x0003, 0)
+"""
+
+_VK_NEXT  = 0xB0   # VK_MEDIA_NEXT_TRACK
+_VK_PREV  = 0xB1   # VK_MEDIA_PREV_TRACK
+_VK_PLAY  = 0xB3   # VK_MEDIA_PLAY_PAUSE
+
+_TMPDIR = Path(tempfile.gettempdir())
+_PS_NEXT = _TMPDIR / "connor_media_next.ps1"
+_PS_PREV = _TMPDIR / "connor_media_prev.ps1"
+_PS_PLAY = _TMPDIR / "connor_media_play.ps1"
 
 
-class _INPUT_UNION(ctypes.Union):
-    _fields_ = [
-        ("ki",  _KEYBDINPUT),
-        ("_mi", ctypes.c_byte * 32),  # pad to MOUSEINPUT size (largest member)
-    ]
+_PS_PRECOMPILE = _TMPDIR / "connor_media_precompile.ps1"
 
 
-class _INPUT(ctypes.Structure):
-    _fields_ = [
-        ("type",   ctypes.c_ulong),
-        ("_input", _INPUT_UNION),
-    ]
-    # On 64-bit: sizeof = 4 (type) + 4 (align pad) + 32 (union) = 40 bytes ✓
+def _ensure_scripts() -> None:
+    """Write PS1 helpers to temp dir and pre-compile the helper DLL (idempotent)."""
+    for path, vk in [(_PS_NEXT, _VK_NEXT), (_PS_PREV, _VK_PREV), (_PS_PLAY, _VK_PLAY)]:
+        if not path.exists():
+            path.write_text(
+                _PS_TEMPLATE.replace("{VK}", hex(vk)),
+                encoding="utf-8",
+            )
+    # Pre-compile ConnorMedia.dll so first keybd_event call is fast (~400ms not ~2s)
+    dll = _TMPDIR / "ConnorMedia.dll"
+    if not dll.exists() and not _PS_PRECOMPILE.exists():
+        _PS_PRECOMPILE.write_text(_PS_COMPILE, encoding="utf-8")
+        subprocess.Popen(
+            [
+                "powershell", "-NoProfile", "-NonInteractive",
+                "-WindowStyle", "Hidden", "-ExecutionPolicy", "Bypass",
+                "-File", str(_PS_PRECOMPILE),
+            ],
+            creationflags=subprocess.CREATE_NO_WINDOW,
+        )
 
 
-def _send_input_key(vk: int) -> bool:
+_ensure_scripts()
+
+
+def _run_ps(ps_path: Path) -> None:
     """
-    Simulate a media key press via SendInput.
-    Returns True if at least the key-down was accepted.
+    Launch a PowerShell script asynchronously (fire-and-forget).
+    We use Popen (non-blocking) so the VAD thread is not stalled.
     """
-    down = _INPUT()
-    down.type = INPUT_KEYBOARD
-    down.ki.wVk = vk
-    down.ki.dwFlags = KEYEVENTF_EXTENDEDKEY
+    try:
+        subprocess.Popen(
+            [
+                "powershell",
+                "-NoProfile",
+                "-NonInteractive",
+                "-WindowStyle", "Hidden",
+                "-ExecutionPolicy", "Bypass",
+                "-File", str(ps_path),
+            ],
+            creationflags=subprocess.CREATE_NO_WINDOW,
+        )
+        logger.log_system(f"[Lune] PS key via {ps_path.name}")
+    except Exception as exc:
+        logger.log_system(f"[Lune] PS launch failed: {exc}")
 
-    up = _INPUT()
-    up.type = INPUT_KEYBOARD
-    up.ki.wVk = vk
-    up.ki.dwFlags = KEYEVENTF_EXTENDEDKEY | KEYEVENTF_KEYUP
 
-    sz = ctypes.sizeof(_INPUT)
-    r1 = _user32.SendInput(1, ctypes.byref(down), sz)
-    time.sleep(0.08)
-    r2 = _user32.SendInput(1, ctypes.byref(up), sz)
-    err = ctypes.get_last_error()
-    logger.log_system(f"[Lune] SendInput vk={hex(vk)} sz={sz} r1={r1} r2={r2} err={err}")
-    return r1 > 0
-
+# ── WM_APPCOMMAND for play/pause ─────────────────────────────────────────────
 
 def _find_lune_hwnd() -> int:
     found: list[int] = []
@@ -117,38 +154,20 @@ def _find_lune_hwnd() -> int:
     return found[0] if found else 0
 
 
-def _appcommand(cmd: int) -> None:
-    """WM_APPCOMMAND — reliable for play/pause in Electron/Chromium."""
+def _appcommand_play_pause() -> None:
     hwnd = _find_lune_hwnd()
-    lparam = cmd << 16
+    lparam = APPCOMMAND_MEDIA_PLAY_PAUSE << 16
     if hwnd:
         ret = _user32.PostMessageW(hwnd, WM_APPCOMMAND, hwnd, lparam)
-        logger.log_system(f"[Lune] PostMessage cmd={cmd} hwnd={hwnd} ret={ret}")
+        logger.log_system(f"[Lune] WM_APPCOMMAND play/pause hwnd={hwnd} ret={ret}")
         if ret:
             return
-    ret2 = _user32.SendMessageW(HWND_BROADCAST, WM_APPCOMMAND, 0, lparam)
-    logger.log_system(f"[Lune] Broadcast cmd={cmd} ret={ret2}")
+    # Broadcast fallback
+    _user32.SendMessageW(HWND_BROADCAST, WM_APPCOMMAND, 0, lparam)
+    logger.log_system("[Lune] WM_APPCOMMAND play/pause broadcast")
 
 
-def _nav_key(vk: int, pg_name: str) -> None:
-    """
-    Next/prev track: SendInput (triggers globalShortcut/WM_HOTKEY in Lune).
-    Falls back to WM_APPCOMMAND then pyautogui if SendInput is blocked.
-    """
-    if _send_input_key(vk):
-        return
-    # SendInput blocked (UIPI?) — try WM_APPCOMMAND for the nav command
-    cmd = APPCOMMAND_MEDIA_NEXTTRACK if vk == VK_MEDIA_NEXT_TRACK else APPCOMMAND_MEDIA_PREVIOUSTRACK
-    _appcommand(cmd)
-    # Last resort: pyautogui
-    logger.log_system(f"[Lune] pyautogui fallback key={pg_name!r}")
-    try:
-        pyautogui.press(pg_name)
-    except Exception as exc:
-        logger.log_system(f"[Lune] pyautogui also failed: {exc}")
-
-
-# ─── Window helpers ───────────────────────────────────────────────────────────
+# ── Window helpers ────────────────────────────────────────────────────────────
 
 def _is_running() -> bool:
     try:
@@ -186,16 +205,17 @@ def _focus() -> bool:
     return False
 
 
-# ─── Player class ────────────────────────────────────────────────────────────
+# ─── Player class ─────────────────────────────────────────────────────────────
 
 class LuneMusicPlayer:
     """
     Controls Lune via OS media keys.
 
-    pause() and resume() both send the play/pause toggle — we don't track
-    internal state because user-initiated changes in Lune would desync it.
-    The overlay text communicates Connor's intent; the actual effect depends
-    on Lune's current state, which is the same behaviour as physical media keys.
+    play/pause  → WM_APPCOMMAND (reliable for Electron/Chromium, no focus needed)
+    next/prev   → PowerShell keybd_event helper (runs in a proper UI process)
+
+    pause() and resume() both send play/pause toggle — tracking internal state
+    would desync when the user manually controls Lune, so we don't bother.
     """
 
     def ensure_open(self) -> bool:
@@ -205,23 +225,23 @@ class LuneMusicPlayer:
 
     def play_pause(self) -> None:
         self.ensure_open()
-        _appcommand(APPCOMMAND_MEDIA_PLAY_PAUSE)
+        _appcommand_play_pause()
 
     def pause(self) -> None:
         self.ensure_open()
-        _appcommand(APPCOMMAND_MEDIA_PLAY_PAUSE)
+        _appcommand_play_pause()
 
     def resume(self) -> None:
         self.ensure_open()
-        _appcommand(APPCOMMAND_MEDIA_PLAY_PAUSE)
+        _appcommand_play_pause()
 
     def next_track(self) -> None:
         self.ensure_open()
-        _nav_key(VK_MEDIA_NEXT_TRACK, "nexttrack")
+        _run_ps(_PS_NEXT)
 
     def prev_track(self) -> None:
         self.ensure_open()
-        _nav_key(VK_MEDIA_PREV_TRACK, "prevtrack")
+        _run_ps(_PS_PREV)
 
     def search_and_play(self, query: str) -> bool:
         if not self.ensure_open():
