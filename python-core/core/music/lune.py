@@ -34,7 +34,7 @@ _LUNE_LNK = (
     r"C:\Users\CompX\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\Lune.lnk"
 )
 _LUNE_TITLE = "Lune"
-_CDP_PORT   = 9222
+_CDP_PORT   = 19222  # unique port; 9222 may be taken by other Electron apps
 
 pyautogui.FAILSAFE = False
 pyautogui.PAUSE    = 0.05
@@ -49,32 +49,28 @@ _user32 = ctypes.windll.user32
 # Tries several strategies: title attr → aria-label → positional fallback
 _JS_CLICK = """
 (function(action) {
-  // 1. Try by title attribute (if Lune adds them)
-  var sel = action === 'next'
-    ? '[title*="Next"],[title*="next"],[title*="Следующий"],[aria-label*="next"],[aria-label*="Next"]'
-    : '[title*="Prev"],[title*="prev"],[title*="Previous"],[title*="Предыдущий"],[aria-label*="prev"],[aria-label*="Prev"]';
+  // Primary: match by title — Lune uses localised Russian titles
+  // (English fallbacks included for safety)
+  var nextSel = 'button[title="Следующий"], button[title="Next"], button[title*="Next"]';
+  var prevSel = 'button[title="Предыдущий"], button[title="Previous"], button[title*="Prev"]';
+  var sel = action === 'next' ? nextSel : prevSel;
   var btn = document.querySelector(sel);
-  if (btn) { btn.click(); return 'by-attr'; }
+  if (btn) { btn.click(); return 'by-title'; }
 
-  // 2. Positional: player control buttons are ordered
-  //    [shuffle][prev][play/pause][next][loop]
-  //    Find them by looking for the biggest cluster of sibling buttons
-  var allBtns = Array.from(document.querySelectorAll('button'));
-  // Find play/pause by checking which button has two different SVG states
-  // (it's the tallest/widest control button in the cluster)
-  // Instead: walk from the play/pause area.
-  // The play/pause button is near center; find it by looking at button widths.
-  // Heuristic: sort by vertical position (bottom of page = player bar),
-  // then find groups of 5 consecutive buttons.
-  var byY = allBtns
-    .map(function(b) { var r = b.getBoundingClientRect(); return {b:b, y:r.top, x:r.left}; })
-    .filter(function(o) { return o.y > window.innerHeight * 0.7; }) // bottom 30%
-    .sort(function(a,b) { return a.x - b.x; });
-
-  if (byY.length >= 4) {
-    // Heuristic: prev is index 1, next is index 3 in the bottom row
-    var idx = action === 'next' ? 3 : 1;
-    if (byY[idx]) { byY[idx].b.click(); return 'by-pos-' + idx; }
+  // Fallback: anchor on .play-pause-btn and grab the sibling next to it
+  var pp = document.querySelector('.play-pause-btn');
+  if (pp) {
+    var ctls = Array.from(document.querySelectorAll('.control-btn'))
+      .sort(function(a, b) {
+        return a.getBoundingClientRect().x - b.getBoundingClientRect().x;
+      });
+    // Among .control-btn sorted by X, prev is the one just before play-pause,
+    // next is the one just after.
+    var ppX = pp.getBoundingClientRect().x;
+    var prevBtn = ctls.filter(function(b) { return b.getBoundingClientRect().x < ppX; }).pop();
+    var nextBtn = ctls.find(function(b) { return b.getBoundingClientRect().x > ppX; });
+    var target = action === 'next' ? nextBtn : prevBtn;
+    if (target) { target.click(); return 'by-play-pause-sibling'; }
   }
   return 'not-found';
 })('{ACTION}')
@@ -84,9 +80,17 @@ _JS_CLICK = """
 # ── CDP helpers ────────────────────────────────────────────────────────────────
 
 def _cdp_available() -> bool:
+    """Check that CDP is open AND that the page target belongs to Lune."""
     try:
-        requests.get(f"http://localhost:{_CDP_PORT}/json", timeout=1)
-        return True
+        resp = requests.get(f"http://localhost:{_CDP_PORT}/json", timeout=1)
+        targets = resp.json()
+        return any(
+            t.get("type") == "page" and (
+                "lune" in t.get("url", "").lower() or
+                "lune" in t.get("title", "").lower()
+            )
+            for t in targets
+        )
     except Exception:
         return False
 
