@@ -13,19 +13,19 @@ from core.constants import SAMPLE_RATE, VAD_CHUNK_MS
 CHUNK_SAMPLES = int(SAMPLE_RATE * VAD_CHUNK_MS / 1000)  # 512 @ 16 kHz / 32 ms
 
 # ─── Gain & thresholds ───────────────────────────────────────────────────────
-# Mic gain is applied in the audio callback BEFORE Silero sees the signal.
-# This boosts quiet microphones without changing the downstream interface.
-# Peak raw RMS observed: 0.011–0.035  →  after x4: 0.044–0.14
-_MIC_GAIN           = 4.0
+# Mic gain is applied before Silero/energy detection only.
+# The raw (pre-gain) audio is buffered for Whisper to avoid clipping distortion.
+# Raised from 4.0 → 5.5 so quiet laptop mics reach detection threshold.
+_MIC_GAIN           = 5.5
 
 # Silero probability threshold (0–1). Lower = more sensitive.
 # After gain, speech probability rises significantly for real speech.
 _SILERO_THRESHOLD   = 0.12
 
 # Energy-based fallback (used when Silero is unavailable).
-# After x4 gain: ambient ~0.02, speech ~0.08+.
-# Threshold 0.035 (after gain) matches the agreed pipeline plan.
-_ENERGY_THRESHOLD   = 0.035
+# After x4 gain: ambient ~0.01-0.02, quiet speech ~0.04+.
+# Lowered from 0.035 to 0.022 to pick up quiet microphones.
+_ENERGY_THRESHOLD   = 0.022
 
 # Debug: log peak RMS seen in N-second windows.
 _DBG_INTERVAL_SEC   = 5
@@ -226,10 +226,13 @@ class VADListener:
             except Exception:
                 pass
 
-        # Minimum utterance: 0.35 s, minimum RMS 0.015 (raw, pre-gain)
-        # Blocks very quiet noise bursts from reaching Whisper.
-        min_samples = int(SAMPLE_RATE * 0.35)
-        min_rms     = 0.015
+        # Minimum utterance: 0.20 s (was 0.35 — shorter to catch clipped commands)
+        # min_rms is on RAW audio; Silero sees x4-amplified signal, so the
+        # effective detection floor is ~_ENERGY_THRESHOLD / _MIC_GAIN ≈ 0.009.
+        # Setting min_rms = 0.003 keeps only truly dead-air frames while letting
+        # through normal speech on quiet microphones.
+        min_samples = int(SAMPLE_RATE * 0.20)
+        min_rms     = 0.003
 
         while not self._stop.is_set():
             audio = self.vad.collect_utterance(
