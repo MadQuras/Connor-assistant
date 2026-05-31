@@ -83,6 +83,13 @@ const STYLE = `
   from { opacity: 1; }
   to   { opacity: 0; }
 }
+/* Darkness veil: stays solid black for 0.5s, then fades away over 0.7s.
+   fill-mode:both means the veil starts at opacity:1 BEFORE the animation begins,
+   hiding any CSS parsing / initial render jitter from the user. */
+@keyframes gs-veil-out {
+  from { opacity: 1; }
+  to   { opacity: 0; }
+}
 `;
 
 function injectStyle() {
@@ -159,6 +166,18 @@ export function GreetingScreen({ onFinish, userName }: GreetingScreenProps) {
         animation: screenAnim,
       }}
     >
+      {/* Darkness veil — hides animation bootstrap jitter.
+          Stays fully black for 0.5 s, then fades away in 0.7 s.
+          fill-mode "both" means it starts at opacity:1 immediately on mount
+          (before the 0.5s delay), so users never see the raw initial render. */}
+      {!exiting && (
+        <div style={{
+          position: 'absolute', inset: 0,
+          background: 'var(--bg, #040d11)',
+          pointerEvents: 'none', zIndex: 20,
+          animation: 'gs-veil-out 0.7s ease 0.5s both',
+        }} />
+      )}
       {/* Scanline sweep */}
       <div style={{
         position: 'absolute', inset: 0, pointerEvents: 'none', overflow: 'hidden', zIndex: 0,
@@ -316,18 +335,25 @@ export function GreetingScreen({ onFinish, userName }: GreetingScreenProps) {
         </div>
       </div>
 
-      {/* Skip hint — centered via left:0/right:0 + textAlign so it never drifts */}
+      {/* Skip hint — outer div stretches full width via left:0/right:0 and uses
+          display:flex + justifyContent:center so centering never relies on
+          text-align or transform tricks that can drift on narrow content. */}
       <div style={{
-        position: 'absolute', bottom: '32px', left: 0, right: 0,
-        textAlign: 'center',
-        fontSize: '10px', letterSpacing: '0.3em',
-        color: 'rgba(var(--cyan-rgb), 0.3)', whiteSpace: 'nowrap',
-        opacity: visible ? 1 : 0,
-        animation: visible
-          ? `${anim('gs-fade-up', '0.5s', '2.0s')}, ${anim('gs-skip-pulse', '2.5s', '2.5s', 'infinite', 'ease-in-out')}`
-          : undefined,
+        position: 'absolute', bottom: '32px',
+        left: 0, right: 0,
+        display: 'flex', justifyContent: 'center', alignItems: 'center',
+        zIndex: 2, pointerEvents: 'none',
       }}>
-        НАЖМИТЕ ДЛЯ ПРОПУСКА
+        <div style={{
+          fontSize: '10px', letterSpacing: '0.3em',
+          color: 'rgba(var(--cyan-rgb), 0.3)',
+          opacity: visible ? 1 : 0,
+          animation: visible
+            ? `${anim('gs-fade-up', '0.5s', '2.0s')}, ${anim('gs-skip-pulse', '2.5s', '2.5s', 'infinite', 'ease-in-out')}`
+            : undefined,
+        }}>
+          НАЖМИТЕ ДЛЯ ПРОПУСКА
+        </div>
       </div>
     </div>
   );
