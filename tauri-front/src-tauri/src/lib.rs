@@ -1,4 +1,6 @@
-﻿use serde::{Deserialize, Serialize};
+﻿use chrono::Local;
+use rusqlite::{params, Connection};
+use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::fs;
 use std::path::PathBuf;
@@ -30,32 +32,31 @@ struct Note {
     done: i64,
 }
 
-/// Helper: run a short Python script against the notes DB.
-/// Passes db_path as sys.argv[1], optional extra arg as sys.argv[2].
-fn py_sqlite(script: &str, extra_args: &[&str]) -> Result<String, String> {
-    let db_path = project_root()
+fn notes_db_path() -> PathBuf {
+    project_root()
         .join("python-core")
         .join("models")
-        .join("notes.db");
-    let mut base = vec![db_path.to_str().unwrap_or("")];
-    base.extend_from_slice(extra_args);
+        .join("notes.db")
+}
 
-    let run = |prog: &str| {
-        Command::new(prog)
-            .args(["-c", script])
-            .args(&base)
-            .output()
-    };
-
-    let out = run("py")
-        .or_else(|_| run("python3"))
-        .or_else(|_| run("python"))
-        .map_err(|e| e.to_string())?;
-
-    if !out.status.success() {
-        return Err(String::from_utf8_lossy(&out.stderr).to_string());
+/// Open the notes DB, ensuring the table exists (for first-run before Python creates it).
+fn open_notes_db() -> Result<Connection, String> {
+    let path = notes_db_path();
+    // Create parent dir if needed
+    if let Some(dir) = path.parent() {
+        let _ = fs::create_dir_all(dir);
     }
-    Ok(String::from_utf8_lossy(&out.stdout).trim().to_string())
+    let conn = Connection::open(&path).map_err(|e| e.to_string())?;
+    conn.execute_batch(
+        "CREATE TABLE IF NOT EXISTS notes (
+            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            text       TEXT NOT NULL,
+            created_at TEXT,
+            done       INTEGER NOT NULL DEFAULT 0
+        );",
+    )
+    .map_err(|e| e.to_string())?;
+    Ok(conn)
 }
 
 fn project_root() -> PathBuf {
@@ -66,7 +67,7 @@ fn project_root() -> PathBuf {
             return p;
         }
     }
-    PathBuf::from(r"C:\Users\CompX\Connor-assistant")
+    PathBuf::from(".")
 }
 
 fn config_path() -> PathBuf {
@@ -204,52 +205,50 @@ fn read_memory() -> Result<Value, String> {
 
 #[tauri::command]
 fn read_notes() -> Result<Vec<Note>, String> {
-    let db_path = project_root()
-        .join("python-core")
-        .join("models")
-        .join("notes.db");
-    if !db_path.exists() {
-        return Ok(vec![]);
-    }
-    let script = "import sqlite3,json,sys; \
-        c=sqlite3.connect(sys.argv[1]); \
-        rows=c.execute('SELECT id,text,created_at,done FROM notes ORDER BY id DESC LIMIT 60').fetchall(); \
-        print(json.dumps([{'id':r[0],'text':r[1],'created_at':r[2] or '','done':r[3]} for r in rows]))";
-    let raw = py_sqlite(script, &[])?;
-    if raw.is_empty() {
-        return Ok(vec![]);
-    }
-    serde_json::from_str(&raw).map_err(|e| e.to_string())
+    let conn = open_notes_db()?;
+    let mut stmt = conn
+        .prepare("SELECT id, text, created_at, done FROM notes ORDER BY id DESC LIMIT 60")
+        .map_err(|e| e.to_string())?;
+    let notes: Vec<Note> = stmt
+        .query_map([], |row| {
+            Ok(Note {
+                id: row.get(0)?,
+                text: row.get(1)?,
+                created_at: row.get::<_, Option<String>>(2)?.unwrap_or_default(),
+                done: row.get(3)?,
+            })
+        })
+        .map_err(|e| e.to_string())?
+        .filter_map(|r| r.ok())
+        .collect();
+    Ok(notes)
 }
 
 #[tauri::command]
 fn add_note(text: String) -> Result<(), String> {
-    let script = "import sqlite3,sys; from datetime import datetime; \
-        c=sqlite3.connect(sys.argv[1]); \
-        c.execute('INSERT INTO notes (text,created_at,done) VALUES (?,?,0)', \
-                  (sys.argv[2], datetime.now().isoformat())); \
-        c.commit()";
-    py_sqlite(script, &[text.as_str()])?;
+    let conn = open_notes_db()?;
+    let now = Local::now().format("%Y-%m-%dT%H:%M:%S").to_string();
+    conn.execute(
+        "INSERT INTO notes (text, created_at, done) VALUES (?1, ?2, 0)",
+        params![text, now],
+    )
+    .map_err(|e| e.to_string())?;
     Ok(())
 }
 
 #[tauri::command]
 fn delete_note(id: i64) -> Result<(), String> {
-    let script = "import sqlite3,sys; \
-        c=sqlite3.connect(sys.argv[1]); \
-        c.execute('DELETE FROM notes WHERE id=?', (int(sys.argv[2]),)); \
-        c.commit()";
-    py_sqlite(script, &[&id.to_string()])?;
+    let conn = open_notes_db()?;
+    conn.execute("DELETE FROM notes WHERE id = ?1", params![id])
+        .map_err(|e| e.to_string())?;
     Ok(())
 }
 
 #[tauri::command]
 fn mark_note_done(id: i64) -> Result<(), String> {
-    let script = "import sqlite3,sys; \
-        c=sqlite3.connect(sys.argv[1]); \
-        c.execute('UPDATE notes SET done=1 WHERE id=?', (int(sys.argv[2]),)); \
-        c.commit()";
-    py_sqlite(script, &[&id.to_string()])?;
+    let conn = open_notes_db()?;
+    conn.execute("UPDATE notes SET done = 1 WHERE id = ?1", params![id])
+        .map_err(|e| e.to_string())?;
     Ok(())
 }
 

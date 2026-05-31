@@ -43,33 +43,17 @@ class STTWorker:
             if self._model is not None:
                 return
             import os
-            # Disable any system proxy for this load: SOCKS4/5 proxies are not
-            # supported by httpx (used inside huggingface_hub) and cause a crash.
-            # faster-whisper only needs network on first download; after that the
-            # model lives in the local HF cache.
-            _PROXY_VARS = (
-                "HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY",
-                "http_proxy", "https_proxy", "all_proxy",
-            )
-            saved = {k: os.environ.pop(k, None) for k in _PROXY_VARS}
-            os.environ["NO_PROXY"]       = "*"
-            os.environ["no_proxy"]       = "*"
+            from core.proxy_guard import no_proxy_ctx
             os.environ["HF_HUB_OFFLINE"] = "0"  # allow download on first run
             try:
-                from faster_whisper import WhisperModel
-                logger.log_system(f"Загрузка faster-whisper [{self._size}]…")
-                self._model = WhisperModel(self._size, device="cpu", compute_type="int8")
+                with no_proxy_ctx():
+                    from faster_whisper import WhisperModel
+                    logger.log_system(f"Загрузка faster-whisper [{self._size}]…")
+                    self._model = WhisperModel(self._size, device="cpu", compute_type="int8")
                 logger.log_system("faster-whisper готов")
             except Exception:
                 self._load_error = True
                 raise
-            finally:
-                # Restore original proxy settings for the rest of the process
-                for k, v in saved.items():
-                    if v is not None:
-                        os.environ[k] = v
-                os.environ.pop("NO_PROXY", None)
-                os.environ.pop("no_proxy", None)
 
     def transcribe(self, audio: np.ndarray, language: str = "ru") -> str:
         if audio is None or len(audio) == 0:

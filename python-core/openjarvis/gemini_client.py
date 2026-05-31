@@ -22,6 +22,7 @@ from typing import Optional
 from core.config_loader import load_config
 from core.constants import GEMINI_MODEL
 from core.exceptions import GeminiError
+from core.proxy_guard import no_proxy_ctx
 
 
 def get_client():
@@ -34,9 +35,10 @@ def get_client():
 
 def generate_text(prompt: str, timeout: float = 5.0) -> Optional[str]:
     def _run() -> str:
-        client = get_client()
-        r = client.models.generate_content(model=GEMINI_MODEL, contents=prompt)
-        return (r.text or "").strip()
+        with no_proxy_ctx():
+            client = get_client()
+            r = client.models.generate_content(model=GEMINI_MODEL, contents=prompt)
+            return (r.text or "").strip()
 
     try:
         with ThreadPoolExecutor(max_workers=1) as ex:

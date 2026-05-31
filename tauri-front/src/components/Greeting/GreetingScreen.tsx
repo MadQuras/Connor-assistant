@@ -316,10 +316,10 @@ export function GreetingScreen({ onFinish, userName }: GreetingScreenProps) {
         </div>
       </div>
 
-      {/* Skip hint */}
+      {/* Skip hint — centered via left:0/right:0 + textAlign so it never drifts */}
       <div style={{
-        position: 'absolute', bottom: '32px', left: '50%',
-        transform: 'translateX(-50%)',
+        position: 'absolute', bottom: '32px', left: 0, right: 0,
+        textAlign: 'center',
         fontSize: '10px', letterSpacing: '0.3em',
         color: 'rgba(var(--cyan-rgb), 0.3)', whiteSpace: 'nowrap',
         opacity: visible ? 1 : 0,

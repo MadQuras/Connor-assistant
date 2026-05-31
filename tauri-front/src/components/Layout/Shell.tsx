@@ -2,14 +2,13 @@ import { useState, useEffect, ReactNode } from 'react';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { ConnorLogo } from '../Logo/ConnorLogo';
 
-type Tab = 'dashboard' | 'commands' | 'notes' | 'devices' | 'settings';
+type Tab = 'dashboard' | 'commands' | 'devices' | 'settings';
 
 const LABELS: Record<Tab, string> = {
   dashboard: 'ГЛАВНАЯ',
-  commands: 'КОМАНДЫ',
-  notes: 'ПАМЯТЬ',
-  devices: 'УСТРОЙСТВА',
-  settings: 'НАСТРОЙКИ',
+  commands:  'КОМАНДЫ',
+  devices:   'УСТРОЙСТВА',
+  settings:  'НАСТРОЙКИ',
 };
 
 const TIPS = [
@@ -121,18 +120,24 @@ function LeftPanel() {
 // BottomBar removed — replaced by left slide-out text overlay (PyQt5)
 
 
-export function Shell({ children }: { children: (tab: Tab) => ReactNode }) {
+export function Shell({
+  children,
+  onOpenNotes,
+}: {
+  children: (tab: Tab) => ReactNode;
+  onOpenNotes?: () => void;
+}) {
   const [tab, setTab]       = useState<Tab>('dashboard');
   const [pageKey, setPageKey] = useState(0);
   const clock = useClock();
 
   const changeTab = (t: Tab) => {
     setTab(t);
-    setPageKey(k => k + 1);  // remounts page → triggers page-enter animation
+    setPageKey(k => k + 1);
   };
 
-  const handleMin = () => getCurrentWindow().minimize();
-  const handleMax = () => getCurrentWindow().toggleMaximize();
+  const handleMin   = () => getCurrentWindow().minimize();
+  const handleMax   = () => getCurrentWindow().toggleMaximize();
   const handleClose = () => getCurrentWindow().close();
 
   return (
@@ -182,6 +187,16 @@ export function Shell({ children }: { children: (tab: Tab) => ReactNode }) {
               {LABELS[t]}
             </button>
           ))}
+          {/* Notes opens as fullscreen overlay — not a regular tab */}
+          <button
+            type="button"
+            className="tab"
+            onClick={onOpenNotes}
+            title="Открыть заметки"
+          >
+            <div className="tab-dot" />
+            ПАМЯТЬ
+          </button>
         </div>
 
         {/* BODY */}

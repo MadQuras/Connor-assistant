@@ -406,6 +406,12 @@ begin
   PyExe := FindPython;
   if PyExe = '' then PyExe := 'python';  // last resort — hope it's in PATH
 
+  // Save pythonw path for Connor.vbs / start.bat (portable across PCs)
+  if PyExe <> '' then begin
+    SaveStringToFile(AppDir + '\python_path.txt',
+      Copy(PyExe, 1, Length(PyExe) - Length('python.exe')) + 'pythonw.exe', False);
+  end;
+
   // ── Write python_ready.flag ─────────────────────────────────────────────
   ForceDirectories(AppDir + '\python-core\models');
   SaveStringToFile(AppDir + '\python-core\models\python_ready.flag', '0', False);

@@ -11,6 +11,7 @@ env/
 
 # ── Config (contains API key — never commit) ──────────────────────
 config.json
+python_path.txt
 
 # ── Runtime / generated files ─────────────────────────────────────
 python-core/models/logs.jsonl

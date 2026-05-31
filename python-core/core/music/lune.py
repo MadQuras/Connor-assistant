@@ -19,6 +19,7 @@ If it's already running without that flag, we kill it and relaunch.
 import ctypes
 import ctypes.wintypes
 import json
+import os
 import subprocess
 import time
 from pathlib import Path
@@ -29,12 +30,20 @@ import requests
 import websocket  # type: ignore  (websocket-client)
 from core import logger
 
-_LUNE_EXE = r"C:\Users\CompX\AppData\Local\Programs\Lune\Lune.exe"
-_LUNE_LNK = (
-    r"C:\Users\CompX\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\Lune.lnk"
+# Paths are resolved dynamically so they work on any PC, not just CompX's machine.
+_LOCALAPPDATA = os.environ.get("LOCALAPPDATA", "")
+_APPDATA      = os.environ.get("APPDATA", "")
+
+_LUNE_EXE = os.path.join(_LOCALAPPDATA, "Programs", "Lune", "Lune.exe")
+_LUNE_LNK = os.path.join(
+    _APPDATA, "Microsoft", "Windows", "Start Menu", "Programs", "Lune.lnk"
 )
 _LUNE_TITLE = "Lune"
 _CDP_PORT   = 19222  # unique port; 9222 may be taken by other Electron apps
+
+# CDP talks to localhost — no proxy needed. Pass explicit proxies={} so that
+# environment proxy variables (SOCKS4/5 etc.) are ignored for these requests.
+_NO_PROXY = {"http": None, "https": None}
 
 pyautogui.FAILSAFE = False
 pyautogui.PAUSE    = 0.05
@@ -82,7 +91,7 @@ _JS_CLICK = """
 def _cdp_available() -> bool:
     """Check that CDP is open AND that the page target belongs to Lune."""
     try:
-        resp = requests.get(f"http://localhost:{_CDP_PORT}/json", timeout=1)
+        resp = requests.get(f"http://localhost:{_CDP_PORT}/json", timeout=1, proxies=_NO_PROXY)
         targets = resp.json()
         return any(
             t.get("type") == "page" and (
@@ -98,7 +107,7 @@ def _cdp_available() -> bool:
 def _cdp_eval(js: str) -> str | None:
     """Execute JS in Lune's renderer. Returns result as string or None on error."""
     try:
-        resp = requests.get(f"http://localhost:{_CDP_PORT}/json", timeout=2)
+        resp = requests.get(f"http://localhost:{_CDP_PORT}/json", timeout=2, proxies=_NO_PROXY)
         targets = resp.json()
         page = next((t for t in targets if t.get("type") == "page"), None)
         if not page:
@@ -230,14 +239,22 @@ class LuneMusicPlayer:
     """
 
     def ensure_open(self) -> bool:
+        """
+        Ensure Lune is running.  Connor.vbs / start.bat now launch Lune with
+        --remote-debugging-port=19222 before starting the Python core, so we
+        should never need to kill/relaunch it.  If Lune is running but CDP is
+        not reachable (user started Lune manually without the flag), we log the
+        situation and continue — next/prev will fall back to WM_APPCOMMAND
+        broadcast rather than destroying the user's playback state.
+        """
         if _is_running():
             if not _cdp_available():
-                # Lune is running but without CDP — restart it
-                logger.log_system("[Lune] restarting with --remote-debugging-port")
-                _kill_lune()
-                time.sleep(0.8)
-                return _launch(with_cdp=True)
+                logger.log_system(
+                    "[Lune] running without CDP — next/prev will use WM_APPCOMMAND fallback. "
+                    "Tip: let Connor launch Lune (it passes --remote-debugging-port=19222)."
+                )
             return True
+        # Lune not running at all — launch it with CDP flag
         return _launch(with_cdp=True)
 
     def play_pause(self) -> None:
@@ -255,12 +272,24 @@ class LuneMusicPlayer:
     def next_track(self) -> None:
         self.ensure_open()
         if not _cdp_action("next"):
-            logger.log_system("[Lune] CDP next failed — no button found")
+            logger.log_system("[Lune] CDP next failed — trying WM_APPCOMMAND NEXTTRACK")
+            hwnd = _find_lune_hwnd()
+            lparam = 11 << 16  # APPCOMMAND_MEDIA_NEXTTRACK = 11
+            if hwnd:
+                _user32.PostMessageW(hwnd, WM_APPCOMMAND, hwnd, lparam)
+            else:
+                _user32.SendMessageW(HWND_BROADCAST, WM_APPCOMMAND, 0, lparam)
 
     def prev_track(self) -> None:
         self.ensure_open()
         if not _cdp_action("prev"):
-            logger.log_system("[Lune] CDP prev failed — no button found")
+            logger.log_system("[Lune] CDP prev failed — trying WM_APPCOMMAND PREVIOUSTRACK")
+            hwnd = _find_lune_hwnd()
+            lparam = 12 << 16  # APPCOMMAND_MEDIA_PREVIOUSTRACK = 12
+            if hwnd:
+                _user32.PostMessageW(hwnd, WM_APPCOMMAND, hwnd, lparam)
+            else:
+                _user32.SendMessageW(HWND_BROADCAST, WM_APPCOMMAND, 0, lparam)
 
     def search_and_play(self, query: str) -> bool:
         if not self.ensure_open():
