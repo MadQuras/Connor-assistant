@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+// useRef kept for dismissedRef and onFinishRef
 
 export interface GreetingScreenProps {
   onFinish: () => void;
@@ -100,27 +101,14 @@ function injectStyle() {
   document.head.appendChild(el);
 }
 
-const anim = (name: string, dur: string, delay: string, fill = 'forwards', ease = 'cubic-bezier(0.22,1,0.36,1)') =>
-  `${name} ${dur} ${ease} ${delay} ${fill}`;
-
 export function GreetingScreen({ onFinish, userName }: GreetingScreenProps) {
   const [now, setNow] = useState(() => new Date());
-  const [visible, setVisible] = useState(false);
   const [exiting, setExiting] = useState(false);
   const dismissedRef = useRef(false);
   const onFinishRef = useRef(onFinish);
   onFinishRef.current = onFinish;
 
-  // Inject keyframes once
   useEffect(() => { injectStyle(); }, []);
-
-  // Inject keyframes first, then give the browser ~200 ms to parse them
-  // before kicking off content animations.  Using rAF alone fires too
-  // quickly and the content appears before animations play.
-  useEffect(() => {
-    const id = setTimeout(() => setVisible(true), 200);
-    return () => clearTimeout(id);
-  }, []);
 
   const dismiss = useCallback(() => {
     if (dismissedRef.current) return;
@@ -129,13 +117,11 @@ export function GreetingScreen({ onFinish, userName }: GreetingScreenProps) {
     setTimeout(() => onFinishRef.current(), 700);
   }, []);
 
-  // Tick clock every second
   useEffect(() => {
     const id = setInterval(() => setNow(new Date()), 1000);
     return () => clearInterval(id);
   }, []);
 
-  // Auto-dismiss after 15 seconds
   useEffect(() => {
     const id = setTimeout(dismiss, 15000);
     return () => clearTimeout(id);
@@ -144,12 +130,10 @@ export function GreetingScreen({ onFinish, userName }: GreetingScreenProps) {
   const greeting = getGreeting(now.getHours());
   const displayName = (userName || 'ЛЕЙТЕНАНТ').toUpperCase();
 
-  // Screen always fades in from black on mount; then flickers; then fades out on exit.
-  const screenAnim = exiting
-    ? anim('gs-fade-out', '0.7s', '0s', 'forwards', 'ease')
-    : visible
-      ? anim('gs-flicker', '8s', '2.5s', 'infinite')
-      : anim('gs-screen-in', '0.35s', '0s', 'forwards', 'ease');
+  // b() = animation with fill:both — elements start at 'from' state during delay,
+  // so they're invisible before their own animation plays. No JS visible-toggle needed.
+  const b = (name: string, dur: string, delay: string, ease = 'cubic-bezier(0.22,1,0.36,1)') =>
+    `${name} ${dur} ${ease} ${delay} 1 both`;
 
   return (
     <div
@@ -162,109 +146,57 @@ export function GreetingScreen({ onFinish, userName }: GreetingScreenProps) {
         cursor: 'pointer', userSelect: 'none',
         fontFamily: 'var(--font-mono, "Share Tech Mono", monospace)',
         zIndex: 9999,
-        opacity: exiting ? undefined : (visible ? undefined : 0),
-        animation: screenAnim,
+        // Screen fades in from black immediately; flicker starts at 2.5s
+        animation: exiting
+          ? 'gs-fade-out 0.7s ease 0s forwards'
+          : 'gs-screen-in 0.5s ease 0s both, gs-flicker 8s ease-in-out 2.5s infinite',
       }}
     >
-      {/* Darkness veil — hides animation bootstrap jitter.
-          Stays fully black for 0.5 s, then fades away in 0.7 s.
-          fill-mode "both" means it starts at opacity:1 immediately on mount
-          (before the 0.5s delay), so users never see the raw initial render. */}
-      {!exiting && (
-        <div style={{
-          position: 'absolute', inset: 0,
-          background: 'var(--bg, #040d11)',
-          pointerEvents: 'none', zIndex: 20,
-          animation: 'gs-veil-out 0.7s ease 0.5s both',
-        }} />
-      )}
       {/* Scanline sweep */}
-      <div style={{
-        position: 'absolute', inset: 0, pointerEvents: 'none', overflow: 'hidden', zIndex: 0,
-      }}>
+      <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', overflow: 'hidden', zIndex: 0 }}>
         <div style={{
           position: 'absolute', left: 0, right: 0, height: '2px',
           background: 'linear-gradient(transparent, rgba(var(--cyan-rgb),0.06), transparent)',
-          animation: anim('gs-scan', '6s', '0.5s', 'infinite', 'linear'),
+          animation: 'gs-scan 6s linear 0.5s infinite',
         }} />
       </div>
 
-      {/* Grid background */}
       <div className="grid-bg" style={{ zIndex: 0 }} />
 
       {/* Corner — top-left */}
       <div style={{ position: 'absolute', top: 24, left: 28, zIndex: 2 }}>
         <div style={{ position: 'relative', width: 24, height: 24 }}>
-          <div style={{
-            position: 'absolute', top: 0, left: 0,
-            height: '2px', background: 'var(--cyan)', borderRadius: 1,
-            opacity: visible ? 1 : 0,
-            animation: visible ? anim('gs-corner-h', '0.45s', '0.05s') : undefined,
-          }} />
-          <div style={{
-            position: 'absolute', top: 0, left: 0,
-            width: '2px', background: 'var(--cyan)', borderRadius: 1,
-            opacity: visible ? 1 : 0,
-            animation: visible ? anim('gs-corner-v', '0.45s', '0.05s') : undefined,
-          }} />
+          <div style={{ position: 'absolute', top: 0, left: 0, height: '2px', background: 'var(--cyan)', borderRadius: 1, animation: b('gs-corner-h', '0.4s', '0.2s') }} />
+          <div style={{ position: 'absolute', top: 0, left: 0, width:  '2px', background: 'var(--cyan)', borderRadius: 1, animation: b('gs-corner-v', '0.4s', '0.2s') }} />
         </div>
       </div>
 
       {/* Corner — top-right */}
       <div style={{ position: 'absolute', top: 24, right: 28, zIndex: 2 }}>
         <div style={{ position: 'relative', width: 24, height: 24 }}>
-          <div style={{
-            position: 'absolute', top: 0, right: 0,
-            height: '2px', background: 'var(--cyan)', borderRadius: 1,
-            opacity: visible ? 1 : 0,
-            animation: visible ? anim('gs-corner-h', '0.45s', '0.10s') : undefined,
-          }} />
-          <div style={{
-            position: 'absolute', top: 0, right: 0,
-            width: '2px', background: 'var(--cyan)', borderRadius: 1,
-            opacity: visible ? 1 : 0,
-            animation: visible ? anim('gs-corner-v', '0.45s', '0.10s') : undefined,
-          }} />
+          <div style={{ position: 'absolute', top: 0, right: 0, height: '2px', background: 'var(--cyan)', borderRadius: 1, animation: b('gs-corner-h', '0.4s', '0.25s') }} />
+          <div style={{ position: 'absolute', top: 0, right: 0, width:  '2px', background: 'var(--cyan)', borderRadius: 1, animation: b('gs-corner-v', '0.4s', '0.25s') }} />
         </div>
       </div>
 
       {/* Corner — bottom-left */}
       <div style={{ position: 'absolute', bottom: 24, left: 28, zIndex: 2 }}>
         <div style={{ position: 'relative', width: 24, height: 24 }}>
-          <div style={{
-            position: 'absolute', bottom: 0, left: 0,
-            height: '2px', background: 'var(--cyan)', borderRadius: 1,
-            opacity: visible ? 1 : 0,
-            animation: visible ? anim('gs-corner-h', '0.45s', '0.15s') : undefined,
-          }} />
-          <div style={{
-            position: 'absolute', bottom: 0, left: 0,
-            width: '2px', background: 'var(--cyan)', borderRadius: 1,
-            opacity: visible ? 1 : 0,
-            animation: visible ? anim('gs-corner-v', '0.45s', '0.15s') : undefined,
-          }} />
+          <div style={{ position: 'absolute', bottom: 0, left: 0, height: '2px', background: 'var(--cyan)', borderRadius: 1, animation: b('gs-corner-h', '0.4s', '0.30s') }} />
+          <div style={{ position: 'absolute', bottom: 0, left: 0, width:  '2px', background: 'var(--cyan)', borderRadius: 1, animation: b('gs-corner-v', '0.4s', '0.30s') }} />
         </div>
       </div>
 
       {/* Corner — bottom-right */}
       <div style={{ position: 'absolute', bottom: 24, right: 28, zIndex: 2 }}>
         <div style={{ position: 'relative', width: 24, height: 24 }}>
-          <div style={{
-            position: 'absolute', bottom: 0, right: 0,
-            height: '2px', background: 'var(--cyan)', borderRadius: 1,
-            opacity: visible ? 1 : 0,
-            animation: visible ? anim('gs-corner-h', '0.45s', '0.20s') : undefined,
-          }} />
-          <div style={{
-            position: 'absolute', bottom: 0, right: 0,
-            width: '2px', background: 'var(--cyan)', borderRadius: 1,
-            opacity: visible ? 1 : 0,
-            animation: visible ? anim('gs-corner-v', '0.45s', '0.20s') : undefined,
-          }} />
+          <div style={{ position: 'absolute', bottom: 0, right: 0, height: '2px', background: 'var(--cyan)', borderRadius: 1, animation: b('gs-corner-h', '0.4s', '0.35s') }} />
+          <div style={{ position: 'absolute', bottom: 0, right: 0, width:  '2px', background: 'var(--cyan)', borderRadius: 1, animation: b('gs-corner-v', '0.4s', '0.35s') }} />
         </div>
       </div>
 
-      {/* Center content */}
+      {/* Center content — all elements use fill:both so they start invisible
+          during their delay, then animate in. No JS toggle required. */}
       <div style={{ position: 'relative', textAlign: 'center', zIndex: 1 }}>
 
         {/* Greeting */}
@@ -272,8 +204,7 @@ export function GreetingScreen({ onFinish, userName }: GreetingScreenProps) {
           fontSize: '13px', letterSpacing: '0.35em',
           color: 'rgba(var(--cyan-rgb), 0.55)',
           marginBottom: '10px', textTransform: 'uppercase',
-          opacity: visible ? 1 : 0,
-          animation: visible ? anim('gs-fade-down', '0.6s', '0.35s') : undefined,
+          animation: b('gs-fade-down', '0.5s', '0.1s'),
         }}>
           {greeting}
         </div>
@@ -282,10 +213,7 @@ export function GreetingScreen({ onFinish, userName }: GreetingScreenProps) {
         <div style={{
           fontSize: '44px', fontWeight: 700, letterSpacing: '0.2em',
           color: 'var(--cyan)', lineHeight: 1, marginBottom: '8px',
-          opacity: visible ? 1 : 0,
-          animation: visible
-            ? `${anim('gs-fade-up', '0.7s', '0.55s')}, ${anim('gs-glow-pulse', '3s', '1.5s', 'infinite', 'ease-in-out')}`
-            : undefined,
+          animation: `${b('gs-fade-up', '0.6s', '0.25s')}, gs-glow-pulse 3s ease-in-out 1.2s infinite both`,
         }}>
           {displayName}
         </div>
@@ -294,22 +222,16 @@ export function GreetingScreen({ onFinish, userName }: GreetingScreenProps) {
         <div style={{
           fontSize: '11px', letterSpacing: '0.32em',
           color: 'rgba(var(--cyan-rgb), 0.35)', marginBottom: '40px',
-          opacity: visible ? 1 : 0,
-          animation: visible ? anim('gs-fade-up', '0.6s', '0.80s') : undefined,
+          animation: b('gs-fade-up', '0.5s', '0.4s'),
         }}>
           СИСТЕМА КОННОРА · CYBERLIFE
         </div>
 
         {/* Divider line */}
-        <div style={{
-          width: '1px', height: '48px', margin: '0 auto 40px',
-          overflow: 'hidden',
-          opacity: visible ? 1 : 0,
-        }}>
+        <div style={{ width: '1px', height: '48px', margin: '0 auto 40px', overflow: 'hidden' }}>
           <div style={{
-            width: '1px',
-            background: 'rgba(var(--cyan-rgb), 0.22)',
-            animation: visible ? anim('gs-divider-grow', '0.5s', '1.0s') : undefined,
+            width: '1px', background: 'rgba(var(--cyan-rgb), 0.22)',
+            animation: b('gs-divider-grow', '0.45s', '0.55s'),
           }} />
         </div>
 
@@ -318,8 +240,7 @@ export function GreetingScreen({ onFinish, userName }: GreetingScreenProps) {
           fontSize: '76px', fontWeight: 700, letterSpacing: '0.06em',
           color: 'var(--cyan)', lineHeight: 1, marginBottom: '14px',
           textShadow: '0 0 40px rgba(var(--cyan-rgb),0.35)',
-          opacity: visible ? 1 : 0,
-          animation: visible ? anim('gs-fade-up', '0.65s', '1.15s') : undefined,
+          animation: b('gs-fade-up', '0.55s', '0.7s'),
         }}>
           {formatTime(now)}
         </div>
@@ -328,16 +249,13 @@ export function GreetingScreen({ onFinish, userName }: GreetingScreenProps) {
         <div style={{
           fontSize: '12px', letterSpacing: '0.25em',
           color: 'rgba(var(--cyan-rgb), 0.5)',
-          opacity: visible ? 1 : 0,
-          animation: visible ? anim('gs-fade-up', '0.6s', '1.35s') : undefined,
+          animation: b('gs-fade-up', '0.5s', '0.85s'),
         }}>
           {formatDate(now)}
         </div>
       </div>
 
-      {/* Skip hint — outer div stretches full width via left:0/right:0 and uses
-          display:flex + justifyContent:center so centering never relies on
-          text-align or transform tricks that can drift on narrow content. */}
+      {/* Skip hint — flex outer for reliable centering regardless of text width */}
       <div style={{
         position: 'absolute', bottom: '32px',
         left: 0, right: 0,
@@ -347,10 +265,7 @@ export function GreetingScreen({ onFinish, userName }: GreetingScreenProps) {
         <div style={{
           fontSize: '10px', letterSpacing: '0.3em',
           color: 'rgba(var(--cyan-rgb), 0.3)',
-          opacity: visible ? 1 : 0,
-          animation: visible
-            ? `${anim('gs-fade-up', '0.5s', '2.0s')}, ${anim('gs-skip-pulse', '2.5s', '2.5s', 'infinite', 'ease-in-out')}`
-            : undefined,
+          animation: `${b('gs-fade-up', '0.5s', '2.0s')}, gs-skip-pulse 2.5s ease-in-out 2.5s infinite both`,
         }}>
           НАЖМИТЕ ДЛЯ ПРОПУСКА
         </div>
