@@ -65,8 +65,11 @@ def _appcommand_play_pause() -> None:
         logger.log_system(f"[Lune] play/pause hwnd={hwnd} ret={ret}")
         if ret:
             return
-    _user32.SendMessageW(HWND_BROADCAST, WM_APPCOMMAND, 0, lparam)
-    logger.log_system("[Lune] play/pause broadcast")
+    # SendNotifyMessageW is non-blocking (fire-and-forget): unlike SendMessageW
+    # it does not wait for every window to reply, avoiding a 10-30 s stall when
+    # any window is unresponsive.
+    _user32.SendNotifyMessageW(HWND_BROADCAST, WM_APPCOMMAND, 0, lparam)
+    logger.log_system("[Lune] play/pause broadcast (notify)")
 
 
 def _is_running() -> bool:
@@ -117,15 +120,14 @@ class LuneMusicPlayer:
         return _launch()
 
     def play_pause(self) -> None:
-        self.ensure_open()
+        # No ensure_open() — broadcast works regardless of window state and
+        # avoids blocking the STT thread while waiting for Lune to start.
         _appcommand_play_pause()
 
     def pause(self) -> None:
-        self.ensure_open()
         _appcommand_play_pause()
 
     def resume(self) -> None:
-        self.ensure_open()
         _appcommand_play_pause()
 
     def next_track(self) -> bool:

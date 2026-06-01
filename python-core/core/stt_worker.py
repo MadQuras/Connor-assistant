@@ -112,20 +112,35 @@ class STTWorker:
             f"(lang={info.language}, prob={info.language_probability:.2f})"
         )
 
-        # Detect Whisper hallucinations: a word repeated excessively
-        # (e.g. "тихо тихо тихо..." × 60 or "тететете..." × 20).
-        # These happen when the model loops on background noise.
+        # Detect Whisper hallucinations using bigram analysis.
+        #
+        # Hallucinations like "тихо тихо тихо..." or "уйдите, а уйдите, а..."
+        # produce very few unique bigrams relative to total bigrams.  Single-word
+        # frequency alone misses alternating patterns ("A B A B...") where the
+        # most-common word is only 50% of the total.
+        #
+        # Also catches single-word loops via the unique-word fallback.
         if text:
             words = text.split()
-            if len(words) > 8:
+            n = len(words)
+            if n > 8:
+                # Bigram repetition check
+                if n > 1:
+                    bigrams = list(zip(words, words[1:]))
+                    unique_bigram_ratio = len(set(bigrams)) / len(bigrams)
+                    if unique_bigram_ratio < 0.20:
+                        logger.log_system(
+                            f"STT: галлюцинация (bigram ratio={unique_bigram_ratio:.2f}, "
+                            f"слов={n}) — игнорирую"
+                        )
+                        return ""
+
+                # Single-word loop fallback (e.g. "тететете...")
                 unique = set(words)
-                most_common_count = max(words.count(w) for w in unique)
-                repeat_ratio = most_common_count / len(words)
-                if repeat_ratio > 0.65 or len(unique) <= 2:
+                if len(unique) <= 2:
                     logger.log_system(
-                        f"STT: галлюцинация обнаружена "
-                        f"(слов={len(words)}, уникальных={len(unique)}, "
-                        f"ratio={repeat_ratio:.2f}) — игнорирую"
+                        f"STT: галлюцинация (уникальных слов={len(unique)}, "
+                        f"слов={n}) — игнорирую"
                     )
                     return ""
 

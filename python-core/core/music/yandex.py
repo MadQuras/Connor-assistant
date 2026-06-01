@@ -34,11 +34,13 @@ HWND_BROADCAST = 0xFFFF
 def _broadcast_media(appcommand: int) -> None:
     """Broadcast WM_APPCOMMAND to all top-level windows.
 
-    This is focus-independent and works even when the player window is
-    minimized or in the background.
+    Uses SendNotifyMessageW (not SendMessageW) so the call returns immediately
+    without waiting for every window to process the message.  SendMessageW with
+    HWND_BROADCAST blocks until ALL windows reply, which can take 10-30 s when
+    any window is busy — freezing the STT dispatch thread and filling the queue.
     """
     try:
-        ctypes.windll.user32.SendMessageW(
+        ctypes.windll.user32.SendNotifyMessageW(
             HWND_BROADCAST,
             WM_APPCOMMAND,
             0,
