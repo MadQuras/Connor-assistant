@@ -28,6 +28,14 @@ def main() -> None:
     # Reset flag from any previous run
     _write_flag(False)
 
+    # ── Phase 0: Auto-detect music player ─────────────────────────────────────
+    # Updates config["music_backend"] if not already set by user.
+    try:
+        from core.player_detector import detect_and_apply as _detect_player
+        _detect_player()
+    except Exception:
+        pass
+
     # ── Phase 1: Play time greeting immediately (before Whisper loads) ────────
     # Audio runs via pygame, independent of ctranslate2 — safe to call first.
     audio_catalog.play_time_greeting(block=False)

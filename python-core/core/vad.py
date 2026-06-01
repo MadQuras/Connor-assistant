@@ -251,12 +251,9 @@ class VADListener:
                     self.vad.drain_queue()
                     continue
                 self.on_utterance(audio)
-                # Drain audio that piled up in queue while handler was running.
-                # Without this, stale mic data creates immediate false utterances
-                # ("Оно ровно." style) right after a real command finishes.
-                dropped = self.vad.drain_queue()
-                if dropped:
-                    logger.log_system(f"VAD drain: {dropped} stale chunks сброшено")
+                # No drain_queue() here: the handler is now non-blocking (it
+                # enqueues into the STT dispatch queue and returns immediately),
+                # so audio chunks are NOT stale by the time handle_audio returns.
 
         self.vad.stop_stream()
 

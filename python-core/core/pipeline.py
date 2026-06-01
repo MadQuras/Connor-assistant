@@ -1,5 +1,6 @@
 ﻿from __future__ import annotations
 
+import queue
 import re
 import threading
 import time
@@ -41,26 +42,35 @@ def _strip_wake_word(text: str) -> str:
 
 
 class VoicePipeline:
-    """VAD → STT → wake → route → handlers → TTS/overlay."""
+    """VAD → STT → wake → route → handlers → TTS/overlay.
+
+    Architecture:
+      VAD thread   — collects utterances, puts them into _utt_queue (non-blocking).
+      STT thread   — drains _utt_queue, runs transcribe() + routing sequentially.
+
+    This decouples audio collection from CPU-bound inference: the VAD thread
+    can start capturing the next phrase while the previous one is still being
+    transcribed.  The queue is capped at 3 to discard very stale utterances.
+    """
+
+    _UTT_QUEUE_MAX = 3  # max pending utterances; extra are dropped with a log
 
     def __init__(self, stt: Any = None) -> None:
         self.fsm    = StateMachine()
-        self._lock  = threading.Lock()
         self._vad_listener: Any = None
         self.overlay = get_overlay()
         self.memory  = MemoryStore()
         self.fsm.on_state_change = self._on_state_change
 
-        # If a pre-loaded STTWorker is injected (loaded in main thread before Qt),
-        # mark it ready immediately — no background load needed.
+        # Utterance queue: VAD thread → STT thread
+        self._utt_queue: queue.Queue = queue.Queue(maxsize=self._UTT_QUEUE_MAX)
+
+        # Set when Whisper model is ready
         self._stt_ready = threading.Event()
         # Set when VAD stream is open + Silero loaded — system fully ready for voice
         self._pipeline_ready = threading.Event()
 
         if stt is not None:
-            # Store stt but do NOT set _stt_ready yet.
-            # The boot thread sets it after Whisper finishes loading,
-            # preventing audio processing from starting before the model is ready.
             self._stt = stt
             logger.log_system("STT получен — ожидаем завершения загрузки модели")
         else:
@@ -113,8 +123,11 @@ class VoicePipeline:
     def start(self) -> None:
         logger.log_system("Запуск VAD…")
 
-        # Start VAD. _process_audio blocks on _stt_ready, so it's safe
-        # to open the mic stream before Whisper is fully loaded.
+        # STT dispatch thread — pulls from _utt_queue, runs transcribe + routing
+        threading.Thread(
+            target=self._stt_loop, name="stt-dispatch", daemon=True
+        ).start()
+
         from core.vad import VADListener
         self._vad_listener = VADListener(
             self.handle_audio,
@@ -123,13 +136,11 @@ class VoicePipeline:
         self._vad_listener.start()
         logger.log_system("VAD запущен — жду сигнала готовности STT")
 
-        # Load Whisper in background only if it wasn't passed in __init__
         if self._stt is None:
             threading.Thread(
                 target=self._load_stt_bg, name="stt-load", daemon=True
             ).start()
 
-        # Poll for test commands from Tauri dashboard
         threading.Thread(
             target=self._poll_test_cmd, name="test-cmd", daemon=True
         ).start()
@@ -155,22 +166,43 @@ class VoicePipeline:
                 except Exception as exc:
                     logger.log_error(f"test_cmd: {exc}")
 
-    # ── Audio processing ──────────────────────────────────────────────────────
+    # ── STT dispatch loop (runs in dedicated thread) ──────────────────────────
+
+    def _stt_loop(self) -> None:
+        """Pull utterances from _utt_queue and process them one at a time.
+
+        Runs in 'stt-dispatch' thread so the VAD thread is never blocked by
+        Whisper inference.  Utterances queued while processing is in progress
+        are handled in order; extra-stale items beyond queue capacity are
+        discarded by handle_audio.
+        """
+        while True:
+            try:
+                audio = self._utt_queue.get(timeout=0.5)
+            except queue.Empty:
+                continue
+            try:
+                self._process_audio(audio)
+            except Exception as exc:
+                logger.log_error(f"stt_loop: {exc}")
+            finally:
+                self._utt_queue.task_done()
+
+    # ── Audio ingestion (VAD thread → queue) ─────────────────────────────────
 
     def handle_audio(self, audio: "np.ndarray") -> None:
         """
         Called by VADListener for every utterance.  Runs in the VAD thread.
-        The lock drops concurrent utterances if we're still processing.
+        Enqueues the utterance for the STT thread; drops it (with a log) if
+        the queue is already full (3 pending) to avoid processing stale audio.
         """
-        if not self._lock.acquire(blocking=False):
-            logger.log_system("handle_audio skipped — ещё обрабатываю предыдущее")
-            return
         try:
-            self._process_audio(audio)
-        except Exception as exc:
-            logger.log_error(f"handle_audio: {exc}")
-        finally:
-            self._lock.release()
+            self._utt_queue.put_nowait(audio)
+        except queue.Full:
+            logger.log_system(
+                "handle_audio: очередь полна — пропускаю фразу "
+                f"(queue size={self._utt_queue.qsize()})"
+            )
 
     def _process_audio(self, audio: "np.ndarray") -> None:
         # Block here until Whisper is ready (up to 120 s).
