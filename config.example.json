@@ -5,7 +5,7 @@
   "command_timeout_sec": 15,
   "first_launch": true,
   "gemini_api_key": "YOUR_GEMINI_API_KEY_HERE",
-  "music_backend": "lune",
+  "music_backend": "yandex",
   "overlay_opacity": 75,
   "use_gemini_route": true,
   "use_gemini_wake": true,

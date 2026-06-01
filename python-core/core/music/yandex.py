@@ -13,6 +13,8 @@ WINDOW_HINTS = ("yandex", "яндекс", "music.yandex", "музыка")
 
 
 class YandexMusicPlayer:
+    supports_track_skip = True
+
     def _home_url(self) -> str:
         return load_config().get("yandex_music_url", "https://music.yandex.ru")
 
@@ -44,13 +46,23 @@ class YandexMusicPlayer:
         self.ensure_open()
         pyautogui.press("playpause")
 
-    def next_track(self) -> None:
+    def pause(self) -> None:
+        self.ensure_open()
+        pyautogui.press("playpause")
+
+    def resume(self) -> None:
+        self.ensure_open()
+        pyautogui.press("playpause")
+
+    def next_track(self) -> bool:
         self.ensure_open()
         pyautogui.press("nexttrack")
+        return True
 
-    def prev_track(self) -> None:
+    def prev_track(self) -> bool:
         self.ensure_open()
         pyautogui.press("prevtrack")
+        return True
 
     def search_and_play(self, query: str) -> bool:
         if not query.strip():

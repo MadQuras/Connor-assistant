@@ -169,14 +169,17 @@ export function SettingsForm() {
         <div className="s-row">
           <div className="s-left">
             <div className="s-title">Музыкальный бэкенд</div>
-            <div className="s-desc">Плеер для голосового управления музыкой</div>
+            <div className="s-desc">
+              Lune — пауза и поиск; след./пред. трек — только Яндекс Музыка
+            </div>
           </div>
           <select
             className="s-sel"
             value={config.music_backend || 'yandex'}
             onChange={(e) => setConfig({ ...config, music_backend: e.target.value })}
           >
-            <option value="yandex">Yandex Music</option>
+            <option value="yandex">Яндекс Музыка (все команды)</option>
+            <option value="lune">Lune (пауза, поиск)</option>
           </select>
         </div>
         <div className="s-row">

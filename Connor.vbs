@@ -4,7 +4,7 @@
 
 Option Explicit
 
-Dim WshShell, FSO, root, pythonw, lunePath
+Dim WshShell, FSO, root, pythonw
 Set WshShell = CreateObject("WScript.Shell")
 Set FSO = CreateObject("Scripting.FileSystemObject")
 
@@ -25,13 +25,6 @@ WshShell.Run "taskkill /F /IM connor-tray-v2.exe /T", 0, True
 WshShell.Run "taskkill /F /IM connor-tray.exe /T",    0, True
 
 WScript.Sleep 800
-
-' Launch Lune with CDP debug port so next/prev track work via Connor
-lunePath = WshShell.ExpandEnvironmentStrings("%LOCALAPPDATA%") & "\Programs\Lune\Lune.exe"
-If FSO.FileExists(lunePath) Then
-  WshShell.Run """" & lunePath & """ --remote-debugging-port=19222", 0, False
-  WScript.Sleep 600
-End If
 
 ' Start Python core silently (pythonw = no console window)
 WshShell.Run """" & pythonw & """ """ & root & "python-core\main.py""", 0, False

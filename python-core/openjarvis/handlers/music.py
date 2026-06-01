@@ -28,8 +28,12 @@ def handle(arg: str, original_text: str = "") -> None:
         "следующ", "next", "дальше", "след трек", "следующий",
         "следующую", "следующая", "вперёд", "вперед",
     )):
-        ov.show_text("Следующий трек")
-        player.next_track()
+        if player.next_track():
+            ov.show_text("Следующий трек")
+        else:
+            ov.show_text(
+                "Lune не переключает треки. В настройках выберите Яндекс Музыку."
+            )
         return
 
     if any(x in text for x in (
@@ -52,8 +56,12 @@ def handle(arg: str, original_text: str = "") -> None:
         "предыдущ", "prev", "назад", "пред трек", "предыдущий",
         "предыдущую", "предыдущая",
     )):
-        ov.show_text("Предыдущий трек")
-        player.prev_track()
+        if player.prev_track():
+            ov.show_text("Предыдущий трек")
+        else:
+            ov.show_text(
+                "Lune не переключает треки. В настройках выберите Яндекс Музыку."
+            )
         return
 
     if text:
