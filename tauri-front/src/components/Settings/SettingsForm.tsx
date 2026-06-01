@@ -243,7 +243,7 @@ export function SettingsForm() {
         </div>
         <div className="info-grid">
           <div className="info-r"><div className="info-k">МОДЕЛЬ</div><div className="info-v">КОННОР RK800</div></div>
-          <div className="info-r"><div className="info-k">ВЕРСИЯ</div><div className="info-v">1.2.0</div></div>
+          <div className="info-r"><div className="info-k">ВЕРСИЯ</div><div className="info-v">1.2.1</div></div>
           <div className="info-r"><div className="info-k">РАСПОЗНАВАНИЕ РЕЧИ</div><div className="info-v">FASTER-WHISPER</div></div>
           <div className="info-r"><div className="info-k">МАРШРУТИЗАТОР</div><div className="info-v">GEMINI + FALLBACK LOCAL</div></div>
           <div className="info-r"><div className="info-k">ИНТЕРФЕЙС</div><div className="info-v">TAURI · REACT</div></div>
