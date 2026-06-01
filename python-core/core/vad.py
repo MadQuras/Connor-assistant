@@ -233,6 +233,13 @@ class VADListener:
         # through normal speech on quiet microphones.
         min_samples = int(SAMPLE_RATE * 0.20)
         min_rms     = 0.003
+        # Voice commands are short (< 8 s).  Longer captures are almost always
+        # background noise that Silero mis-classified as speech — sending them to
+        # Whisper causes multi-second hallucination loops that block the STT thread.
+        max_duration_s = 8.0
+        # When duration is between 4-8 s, require a higher RMS to be treated as real speech.
+        # (Quiet long captures = TV/music background, not commands.)
+        long_rms_floor = 0.015
 
         while not self._stop.is_set():
             audio = self.vad.collect_utterance(
@@ -242,18 +249,32 @@ class VADListener:
             )
             if len(audio) >= min_samples:
                 rms = float(np.sqrt(np.mean(np.square(audio))))
+                duration_s = len(audio) / SAMPLE_RATE
                 logger.log_system(
-                    f"VAD захватил {len(audio)/SAMPLE_RATE:.2f}s, RMS={rms:.4f}"
+                    f"VAD захватил {duration_s:.2f}s, RMS={rms:.4f}"
                 )
+                # 1. Hard silence gate
                 if rms < min_rms:
                     logger.log_system(f"VAD пропуск — слишком тихо (RMS={rms:.4f} < {min_rms})")
-                    # Drain stale chunks accumulated in queue during quiet skip
+                    self.vad.drain_queue()
+                    continue
+                # 2. Long + quiet → background noise, not a command
+                if duration_s > max_duration_s:
+                    logger.log_system(
+                        f"VAD пропуск — слишком долго ({duration_s:.1f}s > {max_duration_s}s)"
+                    )
+                    self.vad.drain_queue()
+                    continue
+                if duration_s > 4.0 and rms < long_rms_floor:
+                    logger.log_system(
+                        f"VAD пропуск — длинный тихий сигнал "
+                        f"({duration_s:.1f}s, RMS={rms:.4f} < {long_rms_floor})"
+                    )
                     self.vad.drain_queue()
                     continue
                 self.on_utterance(audio)
-                # No drain_queue() here: the handler is now non-blocking (it
-                # enqueues into the STT dispatch queue and returns immediately),
-                # so audio chunks are NOT stale by the time handle_audio returns.
+                # No drain_queue() here: handle_audio is non-blocking (puts into
+                # _utt_queue and returns immediately), so audio is not stale.
 
         self.vad.stop_stream()
 

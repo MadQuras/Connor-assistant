@@ -111,4 +111,22 @@ class STTWorker:
             f"STT результат: {text!r} "
             f"(lang={info.language}, prob={info.language_probability:.2f})"
         )
+
+        # Detect Whisper hallucinations: a word repeated excessively
+        # (e.g. "тихо тихо тихо..." × 60 or "тететете..." × 20).
+        # These happen when the model loops on background noise.
+        if text:
+            words = text.split()
+            if len(words) > 8:
+                unique = set(words)
+                most_common_count = max(words.count(w) for w in unique)
+                repeat_ratio = most_common_count / len(words)
+                if repeat_ratio > 0.65 or len(unique) <= 2:
+                    logger.log_system(
+                        f"STT: галлюцинация обнаружена "
+                        f"(слов={len(words)}, уникальных={len(unique)}, "
+                        f"ratio={repeat_ratio:.2f}) — игнорирую"
+                    )
+                    return ""
+
         return text

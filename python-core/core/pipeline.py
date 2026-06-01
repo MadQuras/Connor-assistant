@@ -175,6 +175,10 @@ class VoicePipeline:
         Whisper inference.  Utterances queued while processing is in progress
         are handled in order; extra-stale items beyond queue capacity are
         discarded by handle_audio.
+
+        After each utterance is processed, if the queue still contains 2+
+        items, all but the most recent one are drained — these are background-
+        noise captures or commands from before the user said the last thing.
         """
         while True:
             try:
@@ -187,6 +191,19 @@ class VoicePipeline:
                 logger.log_error(f"stt_loop: {exc}")
             finally:
                 self._utt_queue.task_done()
+                # Drain stale items if the queue backed up during a slow transcription.
+                # Keep only the most recent item (the last thing the user said).
+                stale = self._utt_queue.qsize() - 1
+                for _ in range(max(stale, 0)):
+                    try:
+                        self._utt_queue.get_nowait()
+                        self._utt_queue.task_done()
+                    except queue.Empty:
+                        break
+                if stale > 0:
+                    logger.log_system(
+                        f"stt_loop: дренаж {stale} устаревших фраз из очереди"
+                    )
 
     # ── Audio ingestion (VAD thread → queue) ─────────────────────────────────
 
