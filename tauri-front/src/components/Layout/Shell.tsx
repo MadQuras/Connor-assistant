@@ -110,7 +110,7 @@ function LeftPanel() {
       </div>
       <div className="lp-footer">
         <div className="lp-footer-txt">
-          CYBERLIFE SYSTEMS<br />ANDROID DIVISION<br />BUILD 001 · 2026
+          CYBERLIFE SYSTEMS · 2026
         </div>
       </div>
     </div>
@@ -161,11 +161,9 @@ export function Shell({
             <div className="tb-chip active">
               <span className="tb-chip-dot" />АКТИВЕН
             </div>
-            <div className="tb-chip standby">STANDBY</div>
           </div>
           <div className="tb-right">
             <div className="tb-clock">{clock}</div>
-            <div className="tb-id">#313 248 317</div>
             <div className="winbtns">
               <div className="wbtn min" onClick={handleMin}>─</div>
               <div className="wbtn max" onClick={handleMax}>□</div>

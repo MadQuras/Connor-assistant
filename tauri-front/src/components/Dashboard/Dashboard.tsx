@@ -1,24 +1,15 @@
-﻿import { useEffect, useRef, useState, useCallback } from 'react';
-import { invoke } from '@tauri-apps/api/core';
+﻿import { useEffect, useRef, useState } from 'react';
 import { useConfig } from '../../hooks/useConfig';
 
-const TEST_COMMANDS = [
-  'открой chrome',
-  'который час',
-  'какая погода',
-  'включи музыку',
-  'найди новости',
-  'заблокируй экран',
-];
-
-// ─── Types ───────────────────────────────────────────────────
-interface LogEntry { ts: string; type: string; text: string; }
-
 const QUICK_COMMANDS = [
-  { phrase: 'открой [приложение]', desc: 'запуск из кэша памяти',   audio: 'audio_03–05' },
-  { phrase: 'включи музыку',       desc: 'запуск Yandex Music',      audio: 'audio_21–23' },
-  { phrase: 'найди [запрос]',      desc: 'браузер + поиск',          audio: 'audio_14–16' },
-  { phrase: 'какая погода',        desc: 'данные Weather API',        audio: 'audio_12–13' },
+  { phrase: 'Коннор, открой [приложение]', desc: 'Запуск приложения по имени' },
+  { phrase: 'Коннор, включи музыку',       desc: 'Открыть музыкальный плеер' },
+  { phrase: 'Коннор, найди [запрос]',      desc: 'Поиск в браузере' },
+  { phrase: 'Коннор, какая погода',        desc: 'Текущие погодные данные' },
+  { phrase: 'Коннор, сколько времени',     desc: 'Системное время' },
+  { phrase: 'Коннор, громче / тише',       desc: 'Управление громкостью' },
+  { phrase: 'Коннор, заблокируй',         desc: 'Блокировка рабочей станции' },
+  { phrase: 'Коннор, запомни [текст]',    desc: 'Добавить заметку' },
 ];
 
 // ─── Mic-reactive wave visualiser ────────────────────────────
@@ -124,58 +115,16 @@ function MicWave() {
   );
 }
 
-// ─── Live log terminal ────────────────────────────────────────
-function LogTerminal() {
-  const [logs, setLogs] = useState<LogEntry[]>([]);
-  const bodyRef = useRef<HTMLDivElement>(null);
-
-  const fetchLogs = useCallback(async () => {
-    try {
-      const entries = await invoke<LogEntry[]>('read_logs');
-      setLogs(entries);
-    } catch { /* python core not started yet */ }
-  }, []);
-
-  useEffect(() => {
-    fetchLogs();
-    const id = setInterval(fetchLogs, 1500);
-    return () => clearInterval(id);
-  }, [fetchLogs]);
-
-  // Auto-scroll to bottom when new entries arrive
-  useEffect(() => {
-    const el = bodyRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
-  }, [logs]);
-
-  return (
-    <div className="log-terminal">
-      <div className="log-term-hd">
-        <span className="log-term-dot" />
-        <span className="log-term-dot" />
-        <span className="log-term-dot" />
-        <span className="log-term-title">CONNOR RUNTIME LOG</span>
-      </div>
-      <div className="log-body" ref={bodyRef}>
-        {logs.length === 0 ? (
-          <div className="log-empty">Запустите голосовое ядро чтобы увидеть логи...</div>
-        ) : (
-          logs.map((e, i) => (
-            <div className="log-entry" key={i}>
-              <span className="log-time">{e.ts}</span>
-              <span className={`log-type ${e.type.toLowerCase()}`}>{e.type}</span>
-              <span className="log-text">{e.text}</span>
-            </div>
-          ))
-        )}
-      </div>
-    </div>
-  );
-}
 
 // ─── Dashboard page ───────────────────────────────────────────
 export function Dashboard() {
   const { config, status, startCore } = useConfig();
+  const [coreStarted, setCoreStarted] = useState(false);
+
+  const handleStart = () => {
+    startCore();
+    setCoreStarted(true);
+  };
 
   return (
     <>
@@ -188,25 +137,25 @@ export function Dashboard() {
         </div>
         <div className="stat-grid">
           <div className="stat-card">
-            <div className="stat-label">МОДЕЛЬ</div>
+            <div className="stat-label">РАСПОЗНАВАНИЕ</div>
             <div className="stat-value" style={{ fontSize: 18 }}>
-              {config.whisper_model?.toUpperCase() || 'TINY'}
+              {(config.whisper_model || 'base').toUpperCase()}
             </div>
-            <div className="stat-sub">faster-whisper STT</div>
+            <div className="stat-sub">faster-whisper · русский</div>
             <div className="stat-corner">STT</div>
           </div>
           <div className="stat-card">
             <div className="stat-label">МУЗЫКА</div>
             <div className="stat-value" style={{ fontSize: 18 }}>
-              {config.music_backend?.toUpperCase() || 'YANDEX'}
+              {config.music_backend === 'lune' ? 'LUNE' : 'ЯНДЕКС'}
             </div>
-            <div className="stat-sub">голосовое управление</div>
+            <div className="stat-sub">голосовые команды</div>
             <div className="stat-corner">MUSIC</div>
           </div>
           <div className="stat-card">
             <div className="stat-label">КОМАНДЫ</div>
-            <div className="stat-value">10</div>
-            <div className="stat-sub">сценариев активно</div>
+            <div className="stat-value">15+</div>
+            <div className="stat-sub">голосовых сценариев</div>
             <div className="stat-corner">EXEC</div>
           </div>
           <div className="stat-card">
@@ -220,81 +169,49 @@ export function Dashboard() {
         </div>
       </div>
 
-      {/* MIC WAVE — real amplitude */}
+      {/* MIC WAVE */}
       <MicWave />
 
       {/* START CORE */}
       <div>
         <div className="sec-hd">
-          <div className="sec-title">УПРАВЛЕНИЕ ЯДРОМ</div>
+          <div className="sec-title">ГОЛОСОВОЕ ЯДРО</div>
           <div className="sec-line" />
         </div>
-        <div className="cmd-item" style={{ justifyContent: 'space-between' }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-            <div style={{ fontSize: 11, color: 'var(--text)' }}>Python Core · VoicePipeline</div>
-            <div style={{ fontSize: 9, color: 'rgba(var(--cyan-rgb),0.3)', letterSpacing: 1 }}>
-              {status || 'Готово к запуску'}
+        <div className="cmd-item" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <div style={{ fontSize: 12, color: 'var(--text)', fontWeight: 600, letterSpacing: 1 }}>
+              Python · VoicePipeline
+            </div>
+            <div style={{ fontSize: 10, color: 'rgba(var(--cyan-rgb),0.45)', letterSpacing: 1 }}>
+              {coreStarted ? (status || 'Запускается...') : 'Готово к запуску · скажите «Коннор»'}
             </div>
           </div>
           <button
             type="button"
             className="save-btn"
-            style={{ marginTop: 0, padding: '8px 22px', fontSize: 9 }}
-            onClick={() => startCore()}
+            style={{
+              marginTop: 0,
+              padding: '9px 26px',
+              fontSize: 10,
+              background: coreStarted ? 'rgba(6,214,160,0.15)' : undefined,
+              borderColor: coreStarted ? '#06D6A0' : undefined,
+              color: coreStarted ? '#06D6A0' : undefined,
+            }}
+            onClick={handleStart}
+            disabled={coreStarted}
           >
-            ▶ ЗАПУСТИТЬ ЯДРО
+            {coreStarted ? '● ЯДРО АКТИВНО' : '▶ ЗАПУСТИТЬ ЯДРО'}
           </button>
-        </div>
-      </div>
-
-      {/* LIVE LOG */}
-      <div>
-        <div className="sec-hd">
-          <div className="sec-title">RUNTIME ЛОГИ</div>
-          <div className="sec-line" />
-          <div className="sec-badge">LIVE · 1.5s</div>
-        </div>
-        <LogTerminal />
-      </div>
-
-      {/* TEST COMMANDS — debug bypass (no wake word needed) */}
-      <div>
-        <div className="sec-hd">
-          <div className="sec-title">ТЕСТ КОМАНД</div>
-          <div className="sec-line" />
-          <div className="sec-badge">DEBUG · без wake word</div>
-        </div>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-          {TEST_COMMANDS.map((cmd) => (
-            <button
-              type="button"
-              key={cmd}
-              className="save-btn"
-              style={{
-                margin: 0, fontSize: 9, padding: '7px 16px',
-                background: 'transparent',
-                border: '0.5px solid rgba(var(--cyan-rgb),0.3)',
-              }}
-              onClick={async () => {
-                try {
-                  await invoke('test_command', { cmd });
-                } catch (e) { console.error(e); }
-              }}
-            >
-              {cmd}
-            </button>
-          ))}
-        </div>
-        <div style={{ fontSize: 9, color: 'rgba(var(--cyan-rgb),0.3)', marginTop: 8, letterSpacing: 1 }}>
-          Нажмите — команда пойдёт прямо в пайплайн. Результат появится в логах выше.
         </div>
       </div>
 
       {/* QUICK COMMANDS */}
       <div>
         <div className="sec-hd">
-          <div className="sec-title">БЫСТРЫЕ КОМАНДЫ</div>
+          <div className="sec-title">ГОЛОСОВЫЕ КОМАНДЫ</div>
           <div className="sec-line" />
+          <div className="sec-badge">{QUICK_COMMANDS.length} КОМАНД</div>
         </div>
         <div className="cmd-list">
           {QUICK_COMMANDS.map((c) => (
@@ -302,7 +219,6 @@ export function Dashboard() {
               <div className="cmd-phrase">{c.phrase}</div>
               <div className="cmd-sep">→</div>
               <div className="cmd-desc">{c.desc}</div>
-              <div className="cmd-audio">{c.audio}</div>
               <div className="cmd-ind on" />
             </div>
           ))}
