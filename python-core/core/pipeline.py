@@ -311,17 +311,35 @@ class VoicePipeline:
     # ── Command dispatch ──────────────────────────────────────────────────────
 
     def _on_command(self, text: str) -> None:
+        """Маршрутизация и handlers — в фоне, STT-поток не блокируется."""
+        threading.Thread(
+            target=self._run_command,
+            args=(text,),
+            daemon=True,
+            name="connor-cmd",
+        ).start()
+
+    def _run_command(self, text: str) -> None:
         self.fsm.on_command_start()
         try:
             from openjarvis.route import route_command, dispatch
+            from openjarvis.connor_ui import speak_direct
+
             cat, arg = route_command(text)
             self.fsm.set_responding()
+            if cat == "__HANDLED__":
+                logger.log_handler("TOOL", "ok-inline")
+                return
+            if cat == "__SPEAK__":
+                speak_direct(arg)
+                logger.log_handler("SPEAK", "ok")
+                return
             try:
                 dispatch(cat, arg, original_text=text)
                 logger.log_handler(cat, "ok")
             except Exception as exc:
                 logger.log_error(f"Handler {cat}: {exc}")
-                self.overlay.show_text("Произошла ошибка. Повторите команду")
+                self.overlay.show_text("Произошла ошибка. Повторите команду", tag="КОННОР")
                 try:
                     audio_catalog.play_key("error_unknown", block=False)
                 except Exception:

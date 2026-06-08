@@ -6,6 +6,7 @@ import os
 from core import audio_catalog
 from core.music.base import get_player
 from core.overlay import get_overlay
+from openjarvis.connor_ui import connor_llm_active, show_connor
 
 
 def _playlist_path() -> str:
@@ -22,6 +23,11 @@ def handle(arg: str, original_text: str = "") -> None:
     text = (arg or original_text or "").strip().lower()
     ov = get_overlay()
     player = get_player()
+    llm_ui = connor_llm_active()
+
+    def _say(msg: str) -> None:
+        if not llm_ui:
+            ov.show_text(msg, tag="КОННОР")
 
     # Navigation / playback controls
     if any(x in text for x in (
@@ -29,10 +35,13 @@ def handle(arg: str, original_text: str = "") -> None:
         "следующую", "следующая", "вперёд", "вперед",
     )):
         if player.next_track():
-            ov.show_text("Следующий трек")
+            _say("Следующий трек")
         else:
-            ov.show_text(
+            show_connor(
                 "Lune не переключает треки. В настройках выберите Яндекс Музыку."
+            ) if llm_ui else ov.show_text(
+                "Lune не переключает треки. В настройках выберите Яндекс Музыку.",
+                tag="КОННОР",
             )
         return
 
@@ -40,7 +49,7 @@ def handle(arg: str, original_text: str = "") -> None:
         "возобнов", "продолжи", "продолжай", "продолжать", "продолжить",
         "resume", "unpause", "play",
     )):
-        ov.show_text("Воспроизведение")
+        _say("Воспроизведение")
         player.resume()
         return
 
@@ -48,7 +57,7 @@ def handle(arg: str, original_text: str = "") -> None:
         "пауз", "pause", "стоп", "stop", "останови", "останов",
         "прерви", "поставь на паузу",
     )):
-        ov.show_text("Пауза")
+        _say("Пауза")
         player.pause()
         return
 
@@ -57,10 +66,13 @@ def handle(arg: str, original_text: str = "") -> None:
         "предыдущую", "предыдущая",
     )):
         if player.prev_track():
-            ov.show_text("Предыдущий трек")
+            _say("Предыдущий трек")
         else:
-            ov.show_text(
+            show_connor(
                 "Lune не переключает треки. В настройках выберите Яндекс Музыку."
+            ) if llm_ui else ov.show_text(
+                "Lune не переключает треки. В настройках выберите Яндекс Музыку.",
+                tag="КОННОР",
             )
         return
 
@@ -71,18 +83,19 @@ def handle(arg: str, original_text: str = "") -> None:
             a = item["artist"].lower()
             if text in t or text in a:
                 q = f"{item['title']} {item['artist']}"
-                ov.show_text(f"Ищу: {item['title']}")
+                _say(f"Ищу: {item['title']}")
                 player.search_and_play(q)
                 # 10% chance, rotates: audio_21 → audio_24 → audio_21 → …
                 audio_catalog.maybe_play("music_track", "music_open_player", "music_playing", block=False)
                 return
-        ov.show_text(f"Ищу трек: {text}")
+        _say(f"Ищу трек: {text}")
         player.search_and_play(text)
         audio_catalog.maybe_play("music_track", "music_open_player", "music_playing", block=False)
         return
 
     # "открой музыку" — open Lune without specific track
-    ov.show_text(audio_catalog.phrase("commands", "audio_05.wav") or "Включаю музыку")
+    if not llm_ui:
+        ov.show_text(audio_catalog.phrase("commands", "audio_05.wav") or "Включаю музыку", tag="КОННОР")
     player.play_pause()
     # 10% chance, rotates: audio_05 → audio_22 → audio_23 → audio_05 → …
     audio_catalog.maybe_play("music_open", "app_done", "music_open_browse_a", "music_open_browse_b", block=False)

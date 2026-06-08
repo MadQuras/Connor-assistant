@@ -84,21 +84,46 @@ VOLUME — громкость:
   «Громкость изменена, Лейтенант.»
   «Параметр скорректирован.»
 
+SYSTEM — загрузка CPU/RAM:
+  «Текущая нагрузка системы, Лейтенант: …»
+  «Мониторинг завершён. Показатели в норме — или нет.»
+
+UNKNOWN — команда не распознана:
+  «Не удалось интерпретировать приказ, Лейтенант. Повторите.»
+  «Запрос вне моих текущих протоколов, Лейтенант.»
+
 Ответь сейчас одной репликой Коннора — коротко, по-деловому, с лёгкой холодностью андроида."""
 
+_CONTEXT_SUFFIX = """
 
-def _gemini_text(category: str, original_text: str, timeout: float = 3.5) -> Optional[str]:
-    from openjarvis.gemini_client import generate_text
+ДОПОЛНИТЕЛЬНЫЕ ДАННЫЕ (включи в ответ кратко и по делу):
+{context}"""
+
+
+def generate_connor_reply(
+    category: str,
+    original_text: str = "",
+    context: str = "",
+    timeout: float | None = None,
+) -> Optional[str]:
+    from openjarvis.llm_client import generate_text, backend
+    t = timeout if timeout is not None else (45.0 if backend() == "ollama" else 3.5)
+    prompt = _PROMPT.format(text=original_text or category, category=category.upper())
+    if context.strip():
+        prompt += _CONTEXT_SUFFIX.format(context=context.strip())
     try:
-        raw = generate_text(
-            _PROMPT.format(text=original_text or category, category=category),
-            timeout=timeout,
-        )
+        raw = generate_text(prompt, timeout=t)
         if raw:
             return raw.strip().strip('"').strip("'")
     except Exception as e:
-        logger.log_error(f"connor_response gemini: {e}")
+        logger.log_error(f"connor_response llm: {e}")
     return None
+
+
+def _llm_text(category: str, original_text: str, timeout: float = 3.5) -> Optional[str]:
+    from openjarvis.llm_client import backend
+    t = 45.0 if backend() == "ollama" else timeout
+    return generate_connor_reply(category, original_text, timeout=t)
 
 
 
@@ -107,17 +132,24 @@ def respond(category: str, original_text: str = "") -> None:
     Called after the handler has completed its action.
     Runs in a background thread so it never blocks the VAD loop.
     """
+    from openjarvis.llm_client import llm_enabled_for_responses, backend
+
+    if not llm_enabled_for_responses():
+        return
+
     def _run() -> None:
         cat = category.upper()
 
-        # Show Gemini text only for non-visual categories
         if cat not in _VISUAL_ONLY:
-            text = _gemini_text(cat, original_text)
+            text = _llm_text(cat, original_text)
             if text:
-                from core.overlay import get_overlay
-                get_overlay().show_text(text, tag="КОННОР", auto_hide_ms=6000)
+                from openjarvis.connor_ui import show_connor
+                show_connor(text)
+                logger.log_system(
+                    f"[Gemma→КОННОР] {cat}: {text[:80]!r} (backend={backend()})"
+                )
             else:
-                logger.log_system(f"connor_response: no Gemini text for {cat}")
+                logger.log_system(f"connor_response: пустой ответ Gemma для {cat}")
 
         # 10% audio — only for categories not handled by their own handler
         # (SHUTDOWN, LOCK, VOLUME, TIME). Uses maybe_play for consistent counter.

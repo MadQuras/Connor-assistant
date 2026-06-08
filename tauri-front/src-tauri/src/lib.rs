@@ -22,6 +22,17 @@ struct ConfigView {
     working_folder_path: String,
     accent_color: String,
     first_launch: bool,
+    llm_backend: String,
+    ollama_url: String,
+    ollama_model: String,
+    ollama_think: bool,
+    ollama_timeout_sec: i64,
+    use_ollama_tools: bool,
+    use_ollama_wake: bool,
+    use_ollama_responses: bool,
+    use_ollama_chat: bool,
+    use_gemini_route: bool,
+    use_gemini_wake: bool,
 }
 
 #[derive(Serialize, Deserialize, Default)]
@@ -86,7 +97,18 @@ fn defaults() -> Value {
       "auto_confirm_dangerous_commands": false,
       "working_folder_path": "",
       "accent_color": "#00B4D8",
-      "first_launch": true
+      "first_launch": true,
+      "llm_backend": "ollama",
+      "ollama_url": "http://127.0.0.1:11434",
+      "ollama_model": "gemma4:e4b",
+      "ollama_think": false,
+      "ollama_timeout_sec": 45,
+      "use_ollama_tools": true,
+      "use_ollama_wake": true,
+      "use_ollama_responses": true,
+      "use_ollama_chat": true,
+      "use_gemini_route": false,
+      "use_gemini_wake": false
     })
 }
 
@@ -120,6 +142,17 @@ fn load_config() -> Result<ConfigView, String> {
         working_folder_path: v["working_folder_path"].as_str().unwrap_or("").to_string(),
         accent_color: v["accent_color"].as_str().unwrap_or("#00B4D8").to_string(),
         first_launch: v["first_launch"].as_bool().unwrap_or(true),
+        llm_backend: v["llm_backend"].as_str().unwrap_or("ollama").to_string(),
+        ollama_url: v["ollama_url"].as_str().unwrap_or("http://127.0.0.1:11434").to_string(),
+        ollama_model: v["ollama_model"].as_str().unwrap_or("gemma4:e4b").to_string(),
+        ollama_think: v["ollama_think"].as_bool().unwrap_or(false),
+        ollama_timeout_sec: v["ollama_timeout_sec"].as_i64().unwrap_or(45),
+        use_ollama_tools: v["use_ollama_tools"].as_bool().unwrap_or(true),
+        use_ollama_wake: v["use_ollama_wake"].as_bool().unwrap_or(true),
+        use_ollama_responses: v["use_ollama_responses"].as_bool().unwrap_or(true),
+        use_ollama_chat: v["use_ollama_chat"].as_bool().unwrap_or(true),
+        use_gemini_route: v["use_gemini_route"].as_bool().unwrap_or(false),
+        use_gemini_wake: v["use_gemini_wake"].as_bool().unwrap_or(false),
     })
 }
 
@@ -282,9 +315,13 @@ pub fn run() {
             check_python_ready
         ])
         .setup(|app| {
-            // Use one icon source for both the main window and tray icon.
-            let app_icon = tauri::image::Image::from_bytes(include_bytes!("../icons/icon.png"))
-                .map_err(|e| -> Box<dyn std::error::Error> { Box::new(e) })?;
+            // RK800 badge from bundle (icon.ico) — same icon for window + taskbar + tray.
+            let app_icon = app
+                .default_window_icon()
+                .cloned()
+                .ok_or_else(|| -> Box<dyn std::error::Error> {
+                    "Missing bundle icon — run npm run tauri build".into()
+                })?;
             if let Some(window) = app.get_webview_window("main") {
                 let _ = window.set_icon(app_icon.clone());
             }

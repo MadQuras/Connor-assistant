@@ -1,7 +1,6 @@
 ﻿from __future__ import annotations
 
 import re
-from core.config_loader import load_config
 from core.constants import GEMINI_WAKE_TIMEOUT_SEC
 
 # ─── Target phonetic forms ────────────────────────────────────────────────────
@@ -140,9 +139,10 @@ def is_wake(text: str) -> bool:
     if _local_match(low):
         return True
 
-    # Stage 3 — Gemini only for ≤3-token utterances (possible mis-transcription)
-    cfg = load_config()
-    if not cfg.get("use_gemini_wake", True):
+    # Stage 3 — LLM (Gemma / Gemini) для коротких неоднозначных фраз
+    from openjarvis.llm_client import generate_text, llm_enabled_for_wake, backend
+
+    if not llm_enabled_for_wake():
         return False
 
     tokens = low.split()
@@ -150,11 +150,12 @@ def is_wake(text: str) -> bool:
         return False
 
     try:
-        from openjarvis.gemini_client import generate_text
-        ans = generate_text(WAKE_PROMPT.format(text=text), timeout=GEMINI_WAKE_TIMEOUT_SEC)
+        timeout = 20.0 if backend() == "ollama" else GEMINI_WAKE_TIMEOUT_SEC
+        ans = generate_text(WAKE_PROMPT.format(text=text), timeout=timeout)
         if ans:
             return ans.strip().upper().startswith("YES")
     except Exception as exc:
-        print(f"[Wake] Gemini error: {exc}")
+        from core import logger
+        logger.log_error(f"[Wake] LLM error: {exc}")
 
     return False

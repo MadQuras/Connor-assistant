@@ -3,6 +3,7 @@
 from core import audio_catalog
 from core.overlay import get_overlay
 from core.storage.notes_db import NotesDB
+from openjarvis.connor_ui import connor_llm_active
 
 RECALL_PHRASES = ("о чем", "о чём", "напомни", "просил", "что я просил")
 SCHEDULE_PHRASES = ("расписани", "расписание", "план", "schedule")
@@ -21,17 +22,30 @@ def handle(arg: str, original_text: str = "") -> None:
     db = NotesDB()
     text = (arg or "").strip()
     original = (original_text or "").strip()
+    llm_ui = connor_llm_active()
 
     if text and not _is_recall(original):
         db.add(text)
-        ov.show_text(f"Записал: {text}", tag="ПАМЯТЬ", auto_hide_ms=6000)
+        if llm_ui:
+            from openjarvis.connor_ui import speak_connor
+            speak_connor("PLANS", original_text, context=f"Записано: {text}")
+        else:
+            ov.show_text(f"Записал: {text}", tag="ПАМЯТЬ", auto_hide_ms=6000)
         return
 
     notes = db.list_active(limit=8)
     if notes:
         lines = [row[0] for row in notes]
-        ov.show_text("Напоминания:\n" + "\n".join(lines), auto_hide_ms=6000, tag="ПАМЯТЬ")
-        # 10% chance, rotates через все три варианта: audio_11 → audio_10 → audio_09 → …
+        body = "Напоминания:\n" + "\n".join(lines)
+        if llm_ui:
+            from openjarvis.connor_ui import speak_connor
+            speak_connor("PLANS", original_text, context=body)
+        else:
+            ov.show_text(body, auto_hide_ms=6000, tag="ПАМЯТЬ")
         audio_catalog.maybe_play("plans", "plans_recall", "plans_schedule", "plans_list", block=False)
     else:
-        ov.show_text("Напоминаний пока нет", tag="ПАМЯТЬ", auto_hide_ms=6000)
+        if llm_ui:
+            from openjarvis.connor_ui import speak_connor
+            speak_connor("PLANS", original_text, context="Напоминаний пока нет")
+        else:
+            ov.show_text("Напоминаний пока нет", tag="ПАМЯТЬ", auto_hide_ms=6000)

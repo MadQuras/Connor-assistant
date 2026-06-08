@@ -28,6 +28,21 @@ def main() -> None:
     # Reset flag from any previous run
     _write_flag(False)
 
+    # ── Phase 0b: Gemma 4 (Ollama) ───────────────────────────────────────────
+    try:
+        from openjarvis.llm_client import backend, verify_gemma_connection
+        if backend() == "ollama":
+            print("[Connor] Проверка Gemma 4 (Ollama)…", flush=True)
+            gemma = verify_gemma_connection(full_test=True)
+            if gemma.get("ok"):
+                print(f"[Connor] ✓ Gemma подключена: {gemma.get('model')}", flush=True)
+                if gemma.get("test_reply"):
+                    print(f"[Connor]   Тест: {gemma['test_reply']}", flush=True)
+            else:
+                print(f"[Connor] ✗ Gemma: {gemma.get('error')}", flush=True)
+    except Exception as exc:
+        print(f"[Connor] Gemma verify skip: {exc}", flush=True)
+
     # ── Phase 0: Auto-detect music player ─────────────────────────────────────
     # Updates config["music_backend"] if not already set by user.
     try:

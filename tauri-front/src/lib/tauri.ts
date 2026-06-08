@@ -12,6 +12,17 @@ export interface ConnorConfig {
   working_folder_path?: string;
   accent_color?: string;
   first_launch?: boolean;
+  llm_backend?: string;
+  ollama_url?: string;
+  ollama_model?: string;
+  ollama_think?: boolean;
+  ollama_timeout_sec?: number;
+  use_ollama_tools?: boolean;
+  use_ollama_wake?: boolean;
+  use_ollama_responses?: boolean;
+  use_ollama_chat?: boolean;
+  use_gemini_route?: boolean;
+  use_gemini_wake?: boolean;
   // UI-only extras stored in config
   overlay_opacity?: number;
   typewriter_speed?: number;

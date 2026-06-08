@@ -96,8 +96,7 @@ export function BootScreen({ onFinish }: BootScreenProps) {
       <div className="boot-container">
         {/* Logo */}
         <div className="boot-logo-section">
-          <div className="boot-ring2" /><div className="boot-ring1" />
-          <ConnorLogo size={62} animated />
+          <ConnorLogo size={72} animated />
         </div>
         <div className="boot-name">КОННОР</div>
         <div className="boot-sub">CYBERLIFE SYSTEMS · ANDROID RK800</div>

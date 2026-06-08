@@ -43,8 +43,7 @@ function GreetScreen({ onNext, onSkip }: { onNext: () => void; onSkip: () => voi
     <div className="wf-screen">
       <div className="wf-badge">{badge}</div>
       <div className="wf-logo-wrap">
-        <div className="wf-ring3" /><div className="wf-ring2" /><div className="wf-ring1" />
-        <ConnorLogo size={64} animated />
+        <ConnorLogo size={72} animated />
       </div>
       <div className="wf-hello">{text}</div>
       <div className="wf-sub">СИСТЕМА КОННОР RK800 · CYBERLIFE</div>
@@ -181,8 +180,7 @@ function ReadyScreen({ userName, onFinish }: { userName: string; onFinish: () =>
   return (
     <div className="wf-screen">
       <div className="wf-ready-logo">
-        <div className="wf-ring1" />
-        <ConnorLogo size={52} animated />
+        <ConnorLogo size={64} animated />
       </div>
       <div className="wf-ready-title">СИСТЕМА ГОТОВА</div>
       <div className="wf-ready-name">{userName.toUpperCase()}</div>

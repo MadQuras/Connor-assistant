@@ -10,7 +10,7 @@ from core import wake_detector
 from core import logger
 from openjarvis import fallback_router
 from openjarvis import dispatch as _dispatch
-from openjarvis.gemini_client import generate_text
+from openjarvis.llm_client import generate_text, llm_enabled_for_route, llm_enabled_for_chat, backend
 
 
 # ── Gemini STT correction prompt ──────────────────────────────────────────────
@@ -59,16 +59,51 @@ def is_wake_word(text: str) -> bool:
 def route_command(text: str) -> Tuple[str, str]:
     logger.log_system(f'Команда получена: "{text}"')
 
+    # ── Stage 0: бытовой диалог (до локального роутера) ─────────────────────
+    # Иначе «как дела» → PLANS, «ты кто» → SEARCH
+    if backend() == "ollama" and llm_enabled_for_chat():
+        try:
+            from openjarvis.chat_router import is_likely_chat, route_with_ollama_chat
+            if is_likely_chat(text):
+                chat_route = route_with_ollama_chat(text)
+                if chat_route:
+                    return chat_route
+        except Exception as e:
+            logger.log_error(f"Ollama chat: {e}")
+
     # ── Stage 1: fast local router ────────────────────────────────────────────
     local = fallback_router.route(text)
     logger.log_route(local[0], local[1], via="local")
     if local[0] != "UNKNOWN":
         return local
 
-    # ── Stage 2: Gemini corrects STT → re-run local router ───────────────────
+    # ── Stage 2: Ollama Gemma 4 ───────────────────────────────────────────────
+    if backend() == "ollama":
+        try:
+            # Function calling — команды-действия
+            if llm_enabled_for_route():
+                from openjarvis.tool_router import route_with_ollama_tools
+                ollama_route = route_with_ollama_tools(text)
+                if ollama_route:
+                    return ollama_route
+
+            # Fallback: осмысленная фраза без команды → разговор
+            if llm_enabled_for_chat() and text.strip():
+                from openjarvis.chat_router import route_with_ollama_chat
+                chat_route = route_with_ollama_chat(text)
+                if chat_route:
+                    return chat_route
+        except Exception as e:
+            logger.log_error(f"Ollama route: {e}")
+
+    # ── Stage 3: Gemini STT correction (только llm_backend=gemini) ─────────────
+    if backend() != "gemini":
+        logger.log_route("UNKNOWN", "", via="no-match")
+        return "UNKNOWN", ""
+
     cfg = load_config()
     if not cfg.get("use_gemini_route", True):
-        logger.log_system("Gemini отключён в конфиге")
+        logger.log_system("Gemini route отключён в конфиге")
         return local
 
     try:

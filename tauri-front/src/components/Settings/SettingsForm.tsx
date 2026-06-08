@@ -1,11 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useConfig } from '../../hooks/useConfig';
 import { applyAccentColor } from '../../lib/tauri';
-
-const ACCENT_COLORS = [
-  '#00B4D8', '#3A86FF', '#06D6A0',
-  '#FF4D6D', '#9B5DE5', '#FFD60A', '#FB5607', '#FF79C6',
-];
+import { ACCENT_COLORS } from '../../lib/eyeAccent';
 
 function Toggle({ on, onToggle }: { on: boolean; onToggle: () => void }) {
   return <div className={`tog${on ? ' on' : ''}`} onClick={onToggle} />;
@@ -133,17 +129,112 @@ export function SettingsForm() {
         </div>
         <div className="s-row">
           <div className="s-left">
-            <div className="s-title">Gemini API Key</div>
-            <div className="s-desc">Google AI Studio → получить ключ</div>
+            <div className="s-title">LLM бэкенд</div>
+            <div className="s-desc">Локальная Gemma через Ollama или облачный Gemini</div>
           </div>
-          <input
-            type="password"
-            className="s-input"
-            placeholder="AIza..."
-            value={config.gemini_api_key || ''}
-            onChange={(e) => setConfig({ ...config, gemini_api_key: e.target.value })}
-          />
+          <select
+            className="s-sel"
+            value={config.llm_backend || 'ollama'}
+            onChange={(e) => setConfig({ ...config, llm_backend: e.target.value })}
+          >
+            <option value="ollama">Ollama (локально)</option>
+            <option value="gemini">Gemini (облако)</option>
+          </select>
         </div>
+        {(config.llm_backend || 'ollama') === 'ollama' ? (
+          <>
+            <div className="s-row">
+              <div className="s-left">
+                <div className="s-title">Ollama модель</div>
+                <div className="s-desc">Имя модели, как в ollama run</div>
+              </div>
+              <input
+                type="text"
+                className="s-input"
+                placeholder="gemma4:e4b"
+                value={config.ollama_model || 'gemma4:e4b'}
+                onChange={(e) => setConfig({ ...config, ollama_model: e.target.value })}
+                style={{ minWidth: 160 }}
+              />
+            </div>
+            <div className="s-row">
+              <div className="s-left">
+                <div className="s-title">Ollama URL</div>
+                <div className="s-desc">Адрес сервера Ollama</div>
+              </div>
+              <input
+                type="text"
+                className="s-input"
+                placeholder="http://127.0.0.1:11434"
+                value={config.ollama_url || 'http://127.0.0.1:11434'}
+                onChange={(e) => setConfig({ ...config, ollama_url: e.target.value })}
+                style={{ minWidth: 220 }}
+              />
+            </div>
+            <div className="s-row">
+              <div className="s-left">
+                <div className="s-title">Function calling (tools)</div>
+                <div className="s-desc">Gemma 4 выбирает действие Коннора по JSON tools</div>
+              </div>
+              <Toggle
+                on={config.use_ollama_tools !== false}
+                onToggle={() => setConfig({ ...config, use_ollama_tools: config.use_ollama_tools === false })}
+              />
+            </div>
+            <div className="s-row">
+              <div className="s-left">
+                <div className="s-title">Реплики Коннора (Gemma)</div>
+                <div className="s-desc">Gemma генерирует текст в панели после каждой команды</div>
+              </div>
+              <Toggle
+                on={config.use_ollama_responses !== false}
+                onToggle={() => setConfig({ ...config, use_ollama_responses: config.use_ollama_responses === false })}
+              />
+            </div>
+            <div className="s-row">
+              <div className="s-left">
+                <div className="s-title">Бытовой диалог (Gemma)</div>
+                <div className="s-desc">Привет, как дела, шутки — разговор без команд</div>
+              </div>
+              <Toggle
+                on={config.use_ollama_chat !== false}
+                onToggle={() => setConfig({ ...config, use_ollama_chat: config.use_ollama_chat === false })}
+              />
+            </div>
+            <div className="s-row">
+              <div className="s-left">
+                <div className="s-title">Wake word через Gemma</div>
+                <div className="s-desc">LLM для неоднозначного «Коннор» (если локальный матч не сработал)</div>
+              </div>
+              <Toggle
+                on={config.use_ollama_wake !== false}
+                onToggle={() => setConfig({ ...config, use_ollama_wake: config.use_ollama_wake === false })}
+              />
+            </div>
+            <div className="s-row">
+                <div className="s-desc">Показывать блок Thinking… в Ollama (медленнее)</div>
+              </div>
+              <Toggle
+                on={!!config.ollama_think}
+                onToggle={() => setConfig({ ...config, ollama_think: !config.ollama_think })}
+              />
+            </div>
+          </>
+        ) : (
+          <div className="s-row">
+            <div className="s-left">
+              <div className="s-title">Gemini API Key</div>
+              <div className="s-desc">Google AI Studio → получить ключ</div>
+            </div>
+            <input
+              type="password"
+              className="s-input"
+              placeholder="AIza..."
+              value={config.gemini_api_key || ''}
+              onChange={(e) => setConfig({ ...config, gemini_api_key: e.target.value })}
+            />
+          </div>
+        )}
         <div className="s-row">
           <div className="s-left">
             <div className="s-title">Обращение к пользователю</div>
@@ -245,7 +336,7 @@ export function SettingsForm() {
           <div className="info-r"><div className="info-k">МОДЕЛЬ</div><div className="info-v">КОННОР RK800</div></div>
           <div className="info-r"><div className="info-k">ВЕРСИЯ</div><div className="info-v">1.2.1</div></div>
           <div className="info-r"><div className="info-k">РАСПОЗНАВАНИЕ РЕЧИ</div><div className="info-v">FASTER-WHISPER</div></div>
-          <div className="info-r"><div className="info-k">МАРШРУТИЗАТОР</div><div className="info-v">GEMINI + FALLBACK LOCAL</div></div>
+          <div className="info-r"><div className="info-k">МАРШРУТИЗАТОР</div><div className="info-v">{(config.llm_backend || 'ollama') === 'ollama' ? 'OLLAMA TOOLS + LOCAL' : 'GEMINI + LOCAL'}</div></div>
           <div className="info-r"><div className="info-k">ИНТЕРФЕЙС</div><div className="info-v">TAURI · REACT</div></div>
         </div>
       </div>
