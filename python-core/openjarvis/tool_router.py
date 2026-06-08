@@ -8,6 +8,7 @@ from typing import Optional, Tuple
 
 from core import logger
 from core.config_loader import load_config
+from openjarvis.connor_prompts import LANGUAGE_RULES, TTS_SPEECH_RULES, sanitize_connor_reply
 from openjarvis.connor_tools import CONNOR_TOOLS, tool_route_from_calls
 from openjarvis.ollama_client import chat, parse_tool_calls
 
@@ -38,7 +39,10 @@ _SYSTEM = """\
 - сводка сайта → summarize_website
 - заметка / напоминание → add_note / set_reminder
 - блокировка / выключение → lock_pc / shutdown_pc
-"""
+
+""" + LANGUAGE_RULES + """
+
+""" + TTS_SPEECH_RULES
 
 
 def route_with_ollama_tools(text: str) -> Optional[Tuple[str, str]]:
@@ -62,7 +66,7 @@ def route_with_ollama_tools(text: str) -> Optional[Tuple[str, str]]:
 
     calls = parse_tool_calls(message)
     if not calls:
-        content = (message.get("content") or "").strip()
+        content = sanitize_connor_reply(message.get("content") or "")
         if content:
             logger.log_system(f"Ollama text reply: {content[:120]!r}")
             return "__SPEAK__", content

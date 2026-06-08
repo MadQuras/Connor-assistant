@@ -21,6 +21,13 @@ export interface ConnorConfig {
   use_ollama_wake?: boolean;
   use_ollama_responses?: boolean;
   use_ollama_chat?: boolean;
+  use_camb_tts?: boolean;
+  camb_api_key?: string;
+  camb_voice_id?: number;
+  camb_voice_name?: string;
+  camb_language?: string;
+  camb_speech_model?: string;
+  tts_backend?: string;
   use_gemini_route?: boolean;
   use_gemini_wake?: boolean;
   // UI-only extras stored in config

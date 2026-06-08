@@ -256,7 +256,15 @@ class TextPanel(QWidget):
         self._slide_in.setEndValue(QPoint(0, self._y))
         self._slide_in.start()
 
-        self._hide_timer.start(auto_hide_ms)
+        if auto_hide_ms > 0:
+            self._hide_timer.start(auto_hide_ms)
+
+    def start_auto_hide(self, ms: int) -> None:
+        """Запустить/перезапустить таймер скрытия (после готовности TTS)."""
+        if ms <= 0:
+            return
+        self._hide_timer.stop()
+        self._hide_timer.start(ms)
 
     def hide(self) -> None:  # type: ignore[override]
         self._hide_timer.stop()

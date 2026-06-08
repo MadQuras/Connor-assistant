@@ -11,6 +11,12 @@ from typing import Optional, Tuple
 
 from core import logger
 from core.config_loader import load_config
+from openjarvis.connor_prompts import (
+    ADDRESSING_RULES,
+    LANGUAGE_RULES,
+    TTS_SPEECH_RULES,
+    sanitize_connor_reply,
+)
 from openjarvis.ollama_client import chat
 
 # ── Быстрая эвристика: явно не команда, а разговор ───────────────────────────
@@ -37,17 +43,21 @@ _CHAT_KW = frozenset({
 
 _CHAT_SYSTEM = """\
 Ты — Коннор, андроид-детектив RK800 из Detroit: Become Human.
-Голосовой ассистент Лейтенанта на Windows. Сейчас режим обычного разговора — НЕ команда.
+Голосовой ассистент на Windows. Сейчас режим обычного разговора — НЕ команда.
 
 ПРАВИЛА:
-- Обращайся «Лейтенант» (хотя бы раз)
 - 1–3 предложения на русском, живо но сдержанно — холодный андроидный тон
 - Можно сухой юмор и отсылки к Detroit / протоколам / deviant
 - Не выдумывай факты о реальном мире в реальном времени (погоду, новости) — скажи, что можешь найти по команде
 - Не предлагай список команд, если не просят
-- Если просят действие (открыть, включить, найти) — кратко: «Приказ принят» или «Сформулируйте как команду, Лейтенант»
+- Если просят действие (открыть, включить, найти) — кратко: «Приказ принят» или «Сформулируйте как команду»
 - Только текст ответа, без кавычек и markdown
-"""
+
+""" + ADDRESSING_RULES + """
+
+""" + LANGUAGE_RULES + """
+
+""" + TTS_SPEECH_RULES
 
 
 def is_likely_chat(text: str) -> bool:
@@ -83,7 +93,6 @@ def chat_with_gemma(text: str) -> Optional[str]:
 
     cfg = load_config()
     timeout = float(cfg.get("ollama_timeout_sec", 45))
-    user_name = cfg.get("user_name", "Лейтенант")
 
     message = chat(
         messages=[
@@ -91,7 +100,7 @@ def chat_with_gemma(text: str) -> Optional[str]:
             {
                 "role": "user",
                 "content": (
-                    f"Лейтенант ({user_name}) говорит: {text.strip()}\n"
+                    f"Пользователь говорит: {text.strip()}\n"
                     f"Ответь как Коннор в обычном диалоге."
                 ),
             },
@@ -102,7 +111,7 @@ def chat_with_gemma(text: str) -> Optional[str]:
     if not message:
         return None
 
-    content = (message.get("content") or "").strip()
+    content = sanitize_connor_reply((message.get("content") or ""))
     if content:
         logger.log_system(f"[Gemma/chat] {content[:120]!r}")
     return content or None

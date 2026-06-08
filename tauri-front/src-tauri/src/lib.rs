@@ -31,6 +31,12 @@ struct ConfigView {
     use_ollama_wake: bool,
     use_ollama_responses: bool,
     use_ollama_chat: bool,
+    use_camb_tts: bool,
+    camb_api_key: String,
+    camb_voice_id: i64,
+    camb_language: String,
+    camb_speech_model: String,
+    tts_backend: String,
     use_gemini_route: bool,
     use_gemini_wake: bool,
 }
@@ -107,6 +113,12 @@ fn defaults() -> Value {
       "use_ollama_wake": true,
       "use_ollama_responses": true,
       "use_ollama_chat": true,
+      "tts_backend": "camb",
+      "use_camb_tts": false,
+      "camb_api_key": "",
+      "camb_voice_id": 147320,
+      "camb_language": "ru-ru",
+      "camb_speech_model": "mars-8.1-flash-beta",
       "use_gemini_route": false,
       "use_gemini_wake": false
     })
@@ -151,6 +163,12 @@ fn load_config() -> Result<ConfigView, String> {
         use_ollama_wake: v["use_ollama_wake"].as_bool().unwrap_or(true),
         use_ollama_responses: v["use_ollama_responses"].as_bool().unwrap_or(true),
         use_ollama_chat: v["use_ollama_chat"].as_bool().unwrap_or(true),
+        use_camb_tts: v["use_camb_tts"].as_bool().unwrap_or(false),
+        camb_api_key: v["camb_api_key"].as_str().unwrap_or("").to_string(),
+        camb_voice_id: v["camb_voice_id"].as_i64().unwrap_or(147320),
+        camb_language: v["camb_language"].as_str().unwrap_or("ru-ru").to_string(),
+        camb_speech_model: v["camb_speech_model"].as_str().unwrap_or("mars-8.1-flash-beta").to_string(),
+        tts_backend: v["tts_backend"].as_str().unwrap_or("camb").to_string(),
         use_gemini_route: v["use_gemini_route"].as_bool().unwrap_or(false),
         use_gemini_wake: v["use_gemini_wake"].as_bool().unwrap_or(false),
     })

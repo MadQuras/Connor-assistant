@@ -212,6 +212,8 @@ export function SettingsForm() {
               />
             </div>
             <div className="s-row">
+              <div className="s-left">
+                <div className="s-title">Thinking (размышления)</div>
                 <div className="s-desc">Показывать блок Thinking… в Ollama (медленнее)</div>
               </div>
               <Toggle
@@ -249,6 +251,87 @@ export function SettingsForm() {
             style={{ minWidth: 160 }}
           />
         </div>
+      </div>
+
+      {/* TTS — Camb.ai */}
+      <div className="s-section">
+        <div className="sec-hd">
+          <div className="sec-title">ГОЛОС КОННОРА (TTS)</div>
+          <div className="sec-line" />
+        </div>
+        <div className="s-row">
+          <div className="s-left">
+            <div className="s-title">Camb.ai TTS</div>
+            <div className="s-desc">Озвучка реплик Gemma (текст → голос Коннора)</div>
+          </div>
+          <Toggle
+            on={!!config.use_camb_tts}
+            onToggle={() => setConfig({ ...config, use_camb_tts: !config.use_camb_tts })}
+          />
+        </div>
+        {config.use_camb_tts && (
+          <>
+            <div className="s-row">
+              <div className="s-left">
+                <div className="s-title">Camb API Key</div>
+                <div className="s-desc">studio.camb.ai → API Keys</div>
+              </div>
+              <input
+                type="password"
+                className="s-input"
+                placeholder="camb_..."
+                value={config.camb_api_key || ''}
+                onChange={(e) => setConfig({ ...config, camb_api_key: e.target.value })}
+              />
+            </div>
+            <div className="s-row">
+              <div className="s-left">
+                <div className="s-title">Voice ID</div>
+                <div className="s-desc">
+                  Клон Коннора (182207) — из connor_voice.wav. Пересоздать: setup_connor_camb_voice.py
+                </div>
+              </div>
+              <input
+                type="number"
+                className="s-input"
+                placeholder="182207"
+                value={config.camb_voice_id ?? 182207}
+                onChange={(e) => setConfig({ ...config, camb_voice_id: Number(e.target.value) })}
+                style={{ minWidth: 120 }}
+              />
+            </div>
+            <div className="s-row">
+              <div className="s-left">
+                <div className="s-title">Язык</div>
+                <div className="s-desc">BCP-47, для русского — ru-ru</div>
+              </div>
+              <input
+                type="text"
+                className="s-input"
+                placeholder="ru-ru"
+                value={config.camb_language || 'ru-ru'}
+                onChange={(e) => setConfig({ ...config, camb_language: e.target.value })}
+                style={{ minWidth: 100 }}
+              />
+            </div>
+            <div className="s-row">
+              <div className="s-left">
+                <div className="s-title">Модель речи</div>
+                <div className="s-desc">flash — быстро; pro — чуть лучше качество, медленнее</div>
+              </div>
+              <select
+                className="s-sel"
+                value={config.camb_speech_model || 'mars-8.1-flash-beta'}
+                onChange={(e) => setConfig({ ...config, camb_speech_model: e.target.value })}
+              >
+                <option value="mars-8.1-flash-beta">mars-8.1-flash-beta</option>
+                <option value="mars-8.1-pro-beta">mars-8.1-pro-beta</option>
+                <option value="mars-flash">mars-flash</option>
+                <option value="mars-pro">mars-pro</option>
+              </select>
+            </div>
+          </>
+        )}
       </div>
 
       {/* МУЗЫКА */}
@@ -337,7 +420,7 @@ export function SettingsForm() {
           <div className="info-r"><div className="info-k">ВЕРСИЯ</div><div className="info-v">1.2.1</div></div>
           <div className="info-r"><div className="info-k">РАСПОЗНАВАНИЕ РЕЧИ</div><div className="info-v">FASTER-WHISPER</div></div>
           <div className="info-r"><div className="info-k">МАРШРУТИЗАТОР</div><div className="info-v">{(config.llm_backend || 'ollama') === 'ollama' ? 'OLLAMA TOOLS + LOCAL' : 'GEMINI + LOCAL'}</div></div>
-          <div className="info-r"><div className="info-k">ИНТЕРФЕЙС</div><div className="info-v">TAURI · REACT</div></div>
+          <div className="info-r"><div className="info-k">TTS</div><div className="info-v">{config.use_camb_tts ? 'CAMB.AI' : 'WAV CLIPS'}</div></div>
         </div>
       </div>
 

@@ -11,8 +11,9 @@ from core.overlay.wave_panel import WavePanel
 
 
 class _Signals(QObject):
-    show_text     = pyqtSignal(str, int, str)   # text, auto_hide_ms, tag
-    show_wave     = pyqtSignal(bool)
+    show_text       = pyqtSignal(str, int, str)   # text, auto_hide_ms, tag
+    start_auto_hide = pyqtSignal(int)
+    show_wave       = pyqtSignal(bool)
 
 
 class OverlayController:
@@ -36,6 +37,7 @@ class OverlayController:
         self.wave = WavePanel()
 
         self.sigs.show_text.connect(self._on_show_text)
+        self.sigs.start_auto_hide.connect(self._on_start_auto_hide)
         self.sigs.show_wave.connect(self._on_show_wave)
 
     @classmethod
@@ -49,6 +51,9 @@ class OverlayController:
     def _on_show_text(self, text: str, ms: int, tag: str) -> None:
         self.text.show_text(text, ms, tag or "ОТВЕТ")
 
+    def _on_start_auto_hide(self, ms: int) -> None:
+        self.text.start_auto_hide(ms)
+
     def _on_show_wave(self, visible: bool) -> None:
         if visible:
             self.wave.show_wave()
@@ -61,6 +66,10 @@ class OverlayController:
         if not text:
             return
         self.sigs.show_text.emit(text, auto_hide_ms, tag)
+
+    def start_auto_hide(self, ms: int) -> None:
+        if ms > 0:
+            self.sigs.start_auto_hide.emit(ms)
 
     def show_wave(self, visible: bool) -> None:
         self.sigs.show_wave.emit(visible)

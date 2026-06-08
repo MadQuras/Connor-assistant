@@ -110,7 +110,8 @@ def verify_gemma_connection(full_test: bool = True) -> dict[str, Any]:
     if full_test:
         reply = ollama_gen(
             "Ответь одной короткой фразой на русском от лица андроида Коннора RK800: "
-            "подтверди, что ты подключён к голосовому ассистенту Лейтенанта.",
+            "подтверди, что ты подключён к голосовому ассистенту. "
+            "Грамотный русский, без точки в конце.",
             timeout=_ollama_timeout(cfg),
         )
         status["test_reply"] = reply

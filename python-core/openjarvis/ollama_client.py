@@ -16,6 +16,7 @@ import requests
 
 from core import logger
 from core.config_loader import load_config
+from openjarvis.connor_prompts import ADDRESSING_RULES, LANGUAGE_RULES, TTS_SPEECH_RULES
 
 
 def _base_url() -> str:
@@ -38,8 +39,13 @@ def list_models(timeout: float = 3.0) -> list[str]:
 
 _CONNOR_SYSTEM = (
     "Ты — Коннор, андроид RK800 из Detroit: Become Human. "
-    "Голосовой ассистент Лейтенанта на Windows. "
-    "Отвечай кратко на русском, без markdown и без пояснений."
+    "Голосовой ассистент на Windows. "
+    "Отвечай кратко на русском, без markdown и без пояснений. "
+    + ADDRESSING_RULES
+    + " "
+    + LANGUAGE_RULES
+    + " "
+    + TTS_SPEECH_RULES
 )
 
 
@@ -64,6 +70,8 @@ def generate_text(prompt: str, timeout: float = 30.0) -> Optional[str]:
         )
         text = (msg.get("content") or "").strip() if msg else ""
         if text:
+            from openjarvis.connor_prompts import sanitize_connor_reply
+            text = sanitize_connor_reply(text)
             logger.log_system(f"[Gemma] ответ ({len(text)} симв.): {text[:100]!r}")
         return text
 

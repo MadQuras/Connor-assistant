@@ -20,6 +20,8 @@ python-core/models/crash.log
 python-core/models/test_cmd.txt
 python-core/models/memory.json
 python-core/models/notes.db
+python-core/models/tts_cache/
+python-core/models/gemma_status.json
 
 # ── Whisper / Torch model cache ───────────────────────────────────
 *.pt
