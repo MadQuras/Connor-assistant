@@ -303,6 +303,37 @@ fn mark_note_done(id: i64) -> Result<(), String> {
     Ok(())
 }
 
+#[derive(Serialize)]
+struct SystemStats {
+    cpu: f64,
+    ram_pct: f64,
+    ram_used_gb: f64,
+    ram_total_gb: f64,
+}
+
+#[tauri::command]
+fn get_system_stats() -> SystemStats {
+    use sysinfo::System;
+    let mut sys = System::new_all();
+    sys.refresh_cpu_all();
+    sys.refresh_memory();
+    let cpu: f64 = sys.cpus().iter().map(|c| c.cpu_usage() as f64).sum::<f64>()
+        / sys.cpus().len().max(1) as f64;
+    let total = sys.total_memory() as f64 / 1_073_741_824.0;
+    let used = sys.used_memory() as f64 / 1_073_741_824.0;
+    let ram_pct = if sys.total_memory() > 0 {
+        (sys.used_memory() as f64 / sys.total_memory() as f64) * 100.0
+    } else {
+        0.0
+    };
+    SystemStats {
+        cpu: (cpu * 10.0).round() / 10.0,
+        ram_pct: (ram_pct * 10.0).round() / 10.0,
+        ram_used_gb: (used * 10.0).round() / 10.0,
+        ram_total_gb: (total * 10.0).round() / 10.0,
+    }
+}
+
 #[tauri::command]
 fn check_python_ready() -> bool {
     let flag = project_root()
@@ -329,6 +360,7 @@ pub fn run() {
             delete_note,
             mark_note_done,
             read_logs,
+            get_system_stats,
             test_command,
             check_python_ready
         ])

@@ -1,17 +1,21 @@
 ﻿from __future__ import annotations
 
-import subprocess
-
-from core import audio_catalog
-
-_WEATHER_URL = "https://yandex.ru/pogoda/moscow"
+from core import audio_catalog, logger
+from core.overlay import get_overlay
+from core.weather_service import extract_city, fetch_weather
 
 
 def handle(arg: str, original_text: str = "") -> None:
-    try:
-        subprocess.Popen(["cmd", "/c", "start", "", _WEATHER_URL], shell=False)
-    except Exception as e:
-        print(f"[Weather] browser open failed: {e}")
+    city = (arg or "").strip() or extract_city(original_text or arg)
+    data = fetch_weather(city)
+    if data:
+        get_overlay().show_weather(data, auto_hide_ms=12000)
+    else:
+        logger.log_error(f"[Weather] нет данных для {city}")
+        get_overlay().show_text(
+            f"Не удалось получить погоду для {city}",
+            tag="ПОГОДА",
+            auto_hide_ms=8000,
+        )
 
-    # 10% chance, rotates: audio_12 → audio_13 → audio_12 → …
     audio_catalog.maybe_play("weather", "weather", "weather_done", block=False)

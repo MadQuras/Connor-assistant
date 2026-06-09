@@ -326,16 +326,20 @@ def execute_tool(name: str, args: dict[str, Any], original_text: str = "") -> Tu
         return "SEARCH", str(a.get("query", ""))
 
     if name == "get_weather":
-        city = str(a.get("city", "Москва")).strip()
-        try:
-            slug = urllib.parse.quote(city)
-            url = f"https://yandex.ru/pogoda/{slug}"
-            subprocess.Popen(["cmd", "/c", "start", "", url], shell=False)
-        except Exception as e:
-            logger.log_error(f"weather url: {e}")
+        from core.weather_service import extract_city, fetch_weather
+
+        city = str(a.get("city", "") or "").strip() or extract_city(original_text)
         from openjarvis.handlers import weather
+
         weather.handle(city, original_text=original_text)
-        speak_connor("WEATHER", original_text, context=f"Город: {city}")
+        data = fetch_weather(city)  # cache hit после handle
+        ctx = f"Город: {city}"
+        if data:
+            ctx = (
+                f"{data.get('city')}: {data.get('temp')}°C, {data.get('desc')}, "
+                f"ветер {data.get('wind_kmh')} км/ч, влажность {data.get('humidity')}%"
+            )
+        speak_connor("WEATHER", original_text, context=ctx)
         return _HANDLED
 
     if name == "open_youtube":

@@ -585,3 +585,184 @@ html, body {
 .save-btn { transition: transform 0.1s ease, box-shadow 0.2s ease; }
 .save-btn:active { transform: scale(0.96); }
 .save-btn:hover  { box-shadow: 0 0 18px rgba(var(--cyan-rgb),0.35); }
+
+/* ── GLASS REDESIGN (QuickShell-inspired) ───────────────── */
+.dash-hero {
+  display: grid;
+  grid-template-columns: 1.35fr 1fr;
+  gap: 14px;
+  min-height: 280px;
+}
+.glass-card {
+  position: relative;
+  background: rgba(4, 4, 12, 0.92);
+  border: 0.5px solid rgba(var(--cyan-rgb), 0.14);
+  border-radius: 14px;
+  padding: 18px 20px;
+  overflow: hidden;
+  backdrop-filter: blur(12px);
+}
+.glass-ambient {
+  position: absolute;
+  width: 220px; height: 220px;
+  top: -80px; right: -60px;
+  border-radius: 50%;
+  opacity: 0.08;
+  filter: blur(48px);
+  pointer-events: none;
+}
+.glass-hd {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+  position: relative;
+  z-index: 1;
+}
+.glass-title {
+  font-size: 9px;
+  letter-spacing: 3px;
+  color: rgba(var(--cyan-rgb), 0.55);
+}
+.glass-badge {
+  font-size: 8px;
+  letter-spacing: 1px;
+  color: rgba(var(--cyan-rgb), 0.4);
+  border: 0.5px solid rgba(var(--cyan-rgb), 0.15);
+  padding: 3px 10px;
+  border-radius: 20px;
+}
+.glass-muted {
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.28);
+  letter-spacing: 1px;
+}
+.glass-stat::before,
+.glass-row::before {
+  opacity: 0.25;
+}
+
+/* Weather card */
+.weather-hero {
+  text-align: center;
+  position: relative;
+  z-index: 1;
+  padding: 8px 0 12px;
+}
+.weather-icon-bg {
+  font-size: 48px;
+  opacity: 0.35;
+  display: block;
+  margin-bottom: -8px;
+}
+.weather-temp {
+  font-family: 'Rajdhani', sans-serif;
+  font-weight: 900;
+  font-size: 64px;
+  line-height: 1;
+  letter-spacing: 2px;
+}
+.weather-city {
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.45);
+  letter-spacing: 2px;
+  margin-top: 6px;
+}
+.weather-desc {
+  font-size: 11px;
+  letter-spacing: 3px;
+  margin-top: 4px;
+}
+.weather-gauges {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  margin: 12px 0;
+  position: relative;
+  z-index: 1;
+}
+.weather-gauge {
+  text-align: center;
+  padding: 8px 4px;
+  background: rgba(var(--cyan-rgb), 0.04);
+  border-radius: 10px;
+  border: 0.5px solid rgba(255, 255, 255, 0.05);
+}
+.weather-gauge-k {
+  font-size: 7px;
+  letter-spacing: 2px;
+  color: rgba(255, 255, 255, 0.35);
+}
+.weather-gauge-v {
+  font-size: 14px;
+  font-weight: 700;
+  margin-top: 4px;
+}
+.weather-hourly {
+  display: flex;
+  justify-content: space-between;
+  gap: 4px;
+  position: relative;
+  z-index: 1;
+  padding-top: 8px;
+  border-top: 0.5px solid rgba(var(--cyan-rgb), 0.1);
+}
+.weather-hour {
+  flex: 1;
+  text-align: center;
+  font-size: 12px;
+}
+.weather-hour-t {
+  font-size: 11px;
+  color: rgba(224, 247, 255, 0.9);
+}
+.weather-hour-time {
+  font-size: 8px;
+  color: rgba(var(--cyan-rgb), 0.4);
+}
+
+/* Activity card */
+.activity-gauge { margin-bottom: 12px; position: relative; z-index: 1; }
+.activity-gauge-hd {
+  display: flex;
+  justify-content: space-between;
+  font-size: 9px;
+  letter-spacing: 2px;
+  color: rgba(255, 255, 255, 0.4);
+  margin-bottom: 6px;
+}
+.activity-bar-track {
+  height: 6px;
+  border-radius: 6px;
+  background: rgba(var(--cyan-rgb), 0.08);
+  overflow: hidden;
+}
+.activity-bar-fill {
+  height: 100%;
+  border-radius: 6px;
+  transition: width 0.8s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.activity-section-label {
+  font-size: 8px;
+  letter-spacing: 2px;
+  color: rgba(var(--cyan-rgb), 0.35);
+  margin: 8px 0 10px;
+}
+.activity-routes { display: flex; flex-direction: column; gap: 8px; }
+.activity-route-hd {
+  display: flex;
+  justify-content: space-between;
+  font-size: 9px;
+  letter-spacing: 1px;
+  color: rgba(255, 255, 255, 0.5);
+  margin-bottom: 4px;
+}
+
+.stat-grid-3 { grid-template-columns: repeat(3, 1fr); }
+.cmd-list-compact .cmd-item { padding: 9px 12px; }
+.cmd-list-compact .cmd-phrase { min-width: 160px; font-size: 10px; }
+
+@media (max-width: 900px) {
+  .dash-hero { grid-template-columns: 1fr; }
+  .stat-grid-3 { grid-template-columns: 1fr 1fr; }
+}
