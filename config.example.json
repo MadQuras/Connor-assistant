@@ -23,6 +23,7 @@
   "camb_speech_model": "mars-8.1-flash-beta",
   "camb_sample_rate": 44100,
   "connor_panel_hide_ms": 7000,
+  "connor_tts_sync_timeout_sec": 10,
   "camb_timeout_sec": 60,
   "use_gemini_route": false,
   "use_gemini_wake": false,
