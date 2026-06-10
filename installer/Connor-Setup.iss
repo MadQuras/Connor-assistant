@@ -5,7 +5,7 @@
 ; ╚══════════════════════════════════════════════════════════════╝
 
 #define AppName      "Connor RK800"
-#define AppVersion   "1.3.0"
+#define AppVersion   "1.3.1"
 #define AppPublisher "MadQuras"
 #define AppURL       "https://github.com/MadQuras/Connor-assistant"
 #define SrcRoot      ".."
@@ -46,7 +46,7 @@ Name: "russian"; MessagesFile: "compiler:Languages\Russian.isl"
 Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [Messages]
-russian.BeveledLabel=Connor RK800 · CyberLife Systems · v1.0.0
+russian.BeveledLabel=Connor RK800 · CyberLife Systems · v{#AppVersion}
 
 [CustomMessages]
 russian.CompTitle=Компоненты для установки
@@ -59,7 +59,7 @@ russian.DlTitle=Загрузка компонентов
 russian.DlSub=Пожалуйста подождите, идёт загрузка выбранных компонентов...
 russian.PipTitle=Установка Python-пакетов
 russian.PipSub=Устанавливаются зависимости Connor. Это может занять 5–15 минут...
-russian.ApiNote=После завершения откройте config.json и вставьте ваш Gemini API ключ.
+russian.ApiNote=После установки откройте config.json: Gemini API (Q&A) и/или Ollama (локальный LLM). Ollama — install_ollama.bat.
 
 english.CompTitle=Components to install
 english.CompSub=Select components. Already-installed items are detected automatically.
@@ -71,7 +71,7 @@ english.DlTitle=Downloading components
 english.DlSub=Please wait while selected components are being downloaded...
 english.PipTitle=Installing Python packages
 english.PipSub=Installing Connor dependencies. This may take 5–15 minutes...
-english.ApiNote=After setup completes, open config.json and insert your Gemini API key.
+english.ApiNote=After setup, edit config.json: Gemini API (Q&A) and/or Ollama (local LLM). Run install_ollama.bat for Ollama.
 
 [Tasks]
 Name: "desktopicon";   Description: "Создать ярлык на рабочем столе"; GroupDescription: "Дополнительно:"
@@ -84,25 +84,35 @@ Source: "{#SrcRoot}\tauri-front\src-tauri\target\release\connor-tray-v2.exe"; \
 Source: "{#SrcRoot}\tauri-front\src-tauri\icons\*"; \
   DestDir: "{app}\tauri-front\src-tauri\icons"; Flags: ignoreversion recursesubdirs
 
-; Launchers
-Source: "{#SrcRoot}\Connor.vbs";      DestDir: "{app}"; Flags: ignoreversion
-Source: "{#SrcRoot}\start.bat";       DestDir: "{app}"; Flags: ignoreversion
-Source: "{#SrcRoot}\start_core.bat";  DestDir: "{app}"; Flags: ignoreversion
-Source: "{#SrcRoot}\start_tray.bat";  DestDir: "{app}"; Flags: ignoreversion
+; Launchers & utilities
+Source: "{#SrcRoot}\Connor.vbs";          DestDir: "{app}"; Flags: ignoreversion
+Source: "{#SrcRoot}\start.bat";           DestDir: "{app}"; Flags: ignoreversion
+Source: "{#SrcRoot}\start_core.bat";      DestDir: "{app}"; Flags: ignoreversion
+Source: "{#SrcRoot}\start_tray.bat";      DestDir: "{app}"; Flags: ignoreversion
+Source: "{#SrcRoot}\stop_connor.bat";     DestDir: "{app}"; Flags: ignoreversion
+Source: "{#SrcRoot}\create_shortcut.bat"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#SrcRoot}\install_ollama.bat";  DestDir: "{app}"; Flags: ignoreversion
+Source: "{#SrcRoot}\install_deps.bat";   DestDir: "{app}"; Flags: ignoreversion
+Source: "{#SrcRoot}\find_pythonw.bat";   DestDir: "{app}"; Flags: ignoreversion
+Source: "{#SrcRoot}\merge_config.bat";  DestDir: "{app}"; Flags: ignoreversion
+
+; Helper scripts
+Source: "{#SrcRoot}\scripts\*"; DestDir: "{app}\scripts"; Flags: ignoreversion recursesubdirs; Excludes: "__pycache__\*"
 
 ; Config
 Source: "{#SrcRoot}\config.example.json"; DestDir: "{app}"; Flags: ignoreversion
 
 ; Docs
 Source: "{#SrcRoot}\README.md";       DestDir: "{app}"; Flags: ignoreversion
-Source: "{#SrcRoot}\TUTORIAL_VAD";    DestDir: "{app}"; Flags: ignoreversion
+Source: "{#SrcRoot}\FILES.md";        DestDir: "{app}"; Flags: ignoreversion
 Source: "{#SrcRoot}\TUTORIAL_VAD.md"; DestDir: "{app}"; Flags: ignoreversion
 
 ; Python core
 Source: "{#SrcRoot}\python-core\main.py";          DestDir: "{app}\python-core"; Flags: ignoreversion
 Source: "{#SrcRoot}\python-core\requirements.txt"; DestDir: "{app}\python-core"; Flags: ignoreversion
-Source: "{#SrcRoot}\python-core\core\*";       DestDir: "{app}\python-core\core";      Flags: ignoreversion recursesubdirs
-Source: "{#SrcRoot}\python-core\openjarvis\*"; DestDir: "{app}\python-core\openjarvis"; Flags: ignoreversion recursesubdirs
+Source: "{#SrcRoot}\python-core\core\*";       DestDir: "{app}\python-core\core";      Flags: ignoreversion recursesubdirs; Excludes: "__pycache__\*"
+Source: "{#SrcRoot}\python-core\openjarvis\*"; DestDir: "{app}\python-core\openjarvis"; Flags: ignoreversion recursesubdirs; Excludes: "__pycache__\*"
+Source: "{#SrcRoot}\python-core\scripts\*";    DestDir: "{app}\python-core\scripts";    Flags: ignoreversion recursesubdirs
 
 ; Audio + data
 Source: "{#SrcRoot}\python-core\models\audio\*";          DestDir: "{app}\python-core\models\audio";          Flags: ignoreversion recursesubdirs
@@ -133,9 +143,14 @@ Name: "{group}\Connor RK800"; \
 Name: "{group}\Удалить Connor RK800"; Filename: "{uninstallexe}"
 
 [Run]
-; Open config after install
+Filename: "{app}\create_shortcut.bat"; \
+  Description: "Создать ярлык Connor RK800 на рабочем столе"; \
+  Flags: postinstall nowait skipifsilent
+Filename: "{app}\install_ollama.bat"; \
+  Description: "Установить Ollama + модель Gemma (локальный LLM, ~2 ГБ)"; \
+  Flags: postinstall nowait skipifsilent unchecked
 Filename: "notepad.exe"; Parameters: """{app}\config.json"""; \
-  Description: "Открыть config.json (вставьте Gemini API ключ)"; \
+  Description: "Открыть config.json (API-ключи и настройки)"; \
   Flags: postinstall nowait skipifsilent unchecked
 
 [UninstallRun]
@@ -416,9 +431,11 @@ begin
   ForceDirectories(AppDir + '\python-core\models');
   SaveStringToFile(AppDir + '\python-core\models\python_ready.flag', '0', False);
 
-  // ── Create config.json from template ────────────────────────────────────
+  // ── Create / merge config.json ──────────────────────────────────────────
   if not FileExists(AppDir + '\config.json') then
     FileCopy(AppDir + '\config.example.json', AppDir + '\config.json', False);
+  Exec('"' + PyExe + '"', '"' + AppDir + '\python-core\scripts\merge_config.py" --write --quiet',
+    AppDir, SW_HIDE, ewWaitUntilTerminated, Code);
 
   // ── Write pip install batch ──────────────────────────────────────────────
   SetArrayLength(Lines, 5);

@@ -34,8 +34,14 @@ def _init() -> None:
                 pygame.mixer.init(frequency=44100, size=-16, channels=2, buffer=512)
                 _ready = True
             except Exception as exc:
-                print(f"[tts_player] pygame.mixer.init failed: {exc}")
-                _ready = True  # mark ready anyway to avoid repeated init attempts
+                msg = f"[tts_player] pygame.mixer.init failed: {exc}"
+                print(msg)
+                try:
+                    from core import logger
+                    logger.log_error(msg)
+                except Exception:
+                    pass
+                _ready = True  # avoid repeated init attempts
 
 
 def resolve_path(folder: str, pattern: str) -> str:
@@ -70,7 +76,13 @@ def play_file(path: str, block: bool = True) -> None:
             while ch.get_busy():
                 time.sleep(0.05)
     except Exception as exc:
-        print(f"[tts_player] play_file({path!r}) failed: {exc}")
+        msg = f"[tts_player] play_file({path!r}) failed: {exc}"
+        print(msg)
+        try:
+            from core import logger
+            logger.log_error(msg)
+        except Exception:
+            pass
 
 
 def play_named(folder: str, filename: str, block: bool = True) -> str:

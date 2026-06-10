@@ -20,7 +20,7 @@ function Write-Header {
     Write-Host ""
     Write-Host "  ╔══════════════════════════════════════════════════════╗" -ForegroundColor Cyan
     Write-Host "  ║        CONNOR RK800  —  CYBERLIFE INSTALLER          ║" -ForegroundColor Cyan
-    Write-Host "  ║              Android RK800  v1.3.0                   ║" -ForegroundColor Cyan
+    Write-Host "  ║              Android RK800  v1.3.1                   ║" -ForegroundColor Cyan
     Write-Host "  ╚══════════════════════════════════════════════════════╝" -ForegroundColor Cyan
     Write-Host ""
 }
@@ -194,13 +194,26 @@ $CFG     = Join-Path $ROOT "config.json"
 $CFG_EX  = Join-Path $ROOT "config.example.json"
 
 if (Test-Path $CFG) {
-    Write-OK "config.json уже существует — не перезаписываю."
+    Write-OK "config.json уже существует — дополняю недостающие ключи."
 } elseif (Test-Path $CFG_EX) {
     Copy-Item $CFG_EX $CFG
     Write-OK "config.json создан из шаблона."
-    Write-OK "ИИ: llm_backend=ollama, модель gemma4:e4b (установка на следующем шаге)."
 } else {
     Write-Warn "config.example.json не найден. Создайте config.json вручную по образцу из README."
+}
+
+$mergeScript = Join-Path $ROOT "python-core\scripts\merge_config.py"
+if (Test-Path $mergeScript) {
+    if ($PYTHON) {
+        & $PYTHON $mergeScript --write
+    } else {
+        & py -3.11 $mergeScript --write
+    }
+    if ($LASTEXITCODE -eq 0) {
+        Write-OK "config.json синхронизирован с config.example.json (Camb, Ollama, Q&A)"
+    } else {
+        Write-Warn "merge_config.py не выполнен — проверьте config вручную"
+    }
 }
 
 # ── Step 6b: Ollama + Gemma 4 ───────────────────────────────────────────────

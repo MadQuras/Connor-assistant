@@ -418,7 +418,7 @@ export function SettingsForm() {
         </div>
         <div className="info-grid">
           <div className="info-r"><div className="info-k">МОДЕЛЬ</div><div className="info-v">КОННОР RK800</div></div>
-          <div className="info-r"><div className="info-k">ВЕРСИЯ</div><div className="info-v">1.3.0</div></div>
+          <div className="info-r"><div className="info-k">ВЕРСИЯ</div><div className="info-v">1.3.1</div></div>
           <div className="info-r"><div className="info-k">РАСПОЗНАВАНИЕ РЕЧИ</div><div className="info-v">FASTER-WHISPER</div></div>
           <div className="info-r"><div className="info-k">МАРШРУТИЗАТОР</div><div className="info-v">{(config.llm_backend || 'ollama') === 'ollama' ? 'OLLAMA TOOLS + LOCAL' : 'GEMINI + LOCAL'}</div></div>
           <div className="info-r"><div className="info-k">TTS</div><div className="info-v">{config.use_camb_tts ? 'CAMB.AI' : 'WAV CLIPS'}</div></div>
