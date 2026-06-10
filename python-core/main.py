@@ -8,6 +8,11 @@ ROOT = os.path.dirname(os.path.abspath(__file__))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
+# Portable project root for path resolution on any machine
+_PROJECT = os.path.dirname(ROOT)
+if not os.environ.get("CONNOR_ROOT"):
+    os.environ["CONNOR_ROOT"] = _PROJECT
+
 from core import audio_catalog
 from core.config_loader import load_config
 
@@ -53,7 +58,10 @@ def main() -> None:
 
     # ── Phase 1: Play time greeting immediately (before Whisper loads) ────────
     # Audio runs via pygame, independent of ctranslate2 — safe to call first.
-    audio_catalog.play_time_greeting(block=False)
+    try:
+        audio_catalog.play_time_greeting(block=False)
+    except Exception as exc:
+        print(f"[Connor] Greeting skip: {exc}", flush=True)
 
     # ── Phase 2: Load Whisper in main thread (before Qt) ──────────────────────
     # ctranslate2 conflicts with Qt threading when loaded concurrently.

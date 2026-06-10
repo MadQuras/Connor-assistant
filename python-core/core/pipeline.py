@@ -1,7 +1,6 @@
 ﻿from __future__ import annotations
 
 import queue
-import re
 import threading
 import time
 from pathlib import Path
@@ -10,6 +9,7 @@ from typing import TYPE_CHECKING, Any
 from core import audio_catalog
 from core import logger
 from core.constants import ConnorState, MODELS_DIR
+from core.command_text import strip_wake_marks
 from core.overlay import get_overlay
 from core.state_machine import StateMachine
 from core.storage.memory_store import MemoryStore
@@ -19,26 +19,9 @@ if TYPE_CHECKING:
 
 _TEST_FILE = MODELS_DIR / "test_cmd.txt"
 
-# Wake-word prefixes that may precede an inline command.
-# "Коннор, открой музыку" → "открой музыку"
-_WAKE_PREFIX_RE = re.compile(
-    r"^(коннор|конор|конер|конне|конно|коно|гонор|кано|канор|ко[\-\s]нор|"
-    r"кон[\-\s]нор|connor|conner|cannor|conor|кон|кoн)"
-    r"[\s,\.\-!?:;]*",
-    re.IGNORECASE,
-)
-
-
 def _strip_wake_word(text: str) -> str:
-    """
-    Remove the leading wake word from an utterance and return
-    the remainder (stripped).  Returns '' if only the wake word
-    was spoken.
-    """
-    m = _WAKE_PREFIX_RE.match(text.strip())
-    if m:
-        return text[m.end():].strip()
-    return ""
+    """Команда после wake-слова (начало или конец фразы)."""
+    return strip_wake_marks(text)
 
 
 class VoicePipeline:
@@ -83,6 +66,7 @@ class VoicePipeline:
     def _on_state_change(self, old: ConnorState, new: ConnorState) -> None:
         labels = {
             ConnorState.SLEEPING:   "ОЖИДАНИЕ · СКАЖИТЕ «КОННОР»",
+            ConnorState.DISMISSED:  "ОТОШЁЛ · СКАЖИТЕ «КОННОР, ВЕРНИСЬ»",
             ConnorState.AWAKENED:   "СЛУШАЮ · ГОВОРИТЕ КОМАНДУ",
             ConnorState.LISTENING:  "СЛУШАЮ · ГОВОРИТЕ КОМАНДУ",
             ConnorState.PROCESSING: "ОБРАБОТКА · ПОДОЖДИТЕ",
@@ -90,6 +74,9 @@ class VoicePipeline:
         }
         self.overlay.show_status(labels.get(new, str(new)))
         if new == ConnorState.SLEEPING:
+            self.overlay.set_listening(False)
+            self.overlay.show_wave(False)
+        elif new == ConnorState.DISMISSED:
             self.overlay.set_listening(False)
             self.overlay.show_wave(False)
         elif new in (ConnorState.AWAKENED, ConnorState.LISTENING):
@@ -144,6 +131,13 @@ class VoicePipeline:
         threading.Thread(
             target=self._poll_test_cmd, name="test-cmd", daemon=True
         ).start()
+
+        try:
+            from core.activity_tracker import ActivityTracker
+
+            ActivityTracker.get().start()
+        except Exception as exc:
+            logger.log_error(f"ActivityTracker: {exc}")
 
     def stop(self) -> None:
         if self._vad_listener:
@@ -257,16 +251,42 @@ class VoicePipeline:
                 self.fsm.on_empty_transcription()
             return
 
-        # ── Sleep command ─────────────────────────────────────────────────────
+        # ── Dismissed mode: только «Коннор, вернись» ─────────────────────────
+        if self.fsm.is_dismissed():
+            from core.wake_detector import is_wake
+            from core.dismiss import is_return_phrase, strip_return_phrase
+
+            if is_wake(text):
+                cmd = strip_wake_marks(text)
+                if is_return_phrase(cmd or text):
+                    self._handle_return()
+                    rest = strip_return_phrase(cmd) if cmd else ""
+                    if rest and not is_return_phrase(rest):
+                        logger.log_system(f"После возврата: {rest!r}")
+                        self._on_command(rest)
+            else:
+                logger.log_system(f"Dismissed — игнор: {text!r}")
+            return
+
+        # ── Sleep command (обычный сон, будить словом «Коннор») ───────────────
         low = text.lower()
-        if any(x in low for x in ("поспи", "отойди", "спи")):
+        if any(x in low for x in ("поспи", "спи")) and "вернись" not in low:
             self.fsm.on_sleep_command()
-            self.overlay.show_text("Перехожу в режим ожидания. Зовите когда понадоблюсь", tag="СИСТЕМА")
+            self.overlay.show_text(
+                "Перехожу в режим ожидания. Зовите «Коннор», когда понадоблюсь",
+                tag="СИСТЕМА",
+            )
             logger.log_system("Sleep команда")
             try:
                 audio_catalog.play_key("sleep", block=False)
             except Exception:
                 pass
+            return
+
+        # ── Dismiss inline (до wake-routing) ─────────────────────────────────
+        from core.dismiss import is_dismiss_phrase
+        if is_dismiss_phrase(low):
+            self._enter_dismiss()
             return
 
         # ── Wake word check ───────────────────────────────────────────────────
@@ -286,7 +306,11 @@ class VoicePipeline:
 
         # ── Command routing ───────────────────────────────────────────────────
         if self.fsm.is_accepting_command():
-            self._on_command(text)
+            cmd = strip_wake_marks(text)
+            if cmd:
+                self._on_command(cmd)
+            else:
+                self.fsm.on_empty_transcription()
 
     # ── Wake ──────────────────────────────────────────────────────────────────
 
@@ -308,6 +332,25 @@ class VoicePipeline:
 
         self.fsm.set_listening()
 
+    def _enter_dismiss(self) -> None:
+        self.fsm.on_dismiss()
+        self.overlay.show_text(
+            "Ухожу. Скажите «Коннор, вернись», когда понадоблюсь",
+            tag="СИСТЕМА",
+            auto_hide_ms=8000,
+        )
+        logger.log_system("Dismiss — режим «отойди пока»")
+        try:
+            audio_catalog.play_key("sleep", block=False)
+        except Exception:
+            pass
+
+    def _handle_return(self) -> None:
+        self.fsm.on_return()
+        self.fsm.set_listening()
+        self.overlay.show_text("Снова на связи", tag="КОННОР", auto_hide_ms=5000)
+        logger.log_system("Return — вышел из dismiss")
+
     # ── Command dispatch ──────────────────────────────────────────────────────
 
     def _on_command(self, text: str) -> None:
@@ -320,6 +363,12 @@ class VoicePipeline:
         ).start()
 
     def _run_command(self, text: str) -> None:
+        from core.dismiss import is_dismiss_phrase
+
+        if is_dismiss_phrase(text):
+            self._enter_dismiss()
+            return
+
         self.fsm.on_command_start()
         try:
             from openjarvis.route import route_command, dispatch
@@ -327,6 +376,10 @@ class VoicePipeline:
 
             cat, arg = route_command(text)
             self.fsm.set_responding()
+            if cat == "DISMISS":
+                self._enter_dismiss()
+                logger.log_handler("DISMISS", "ok")
+                return
             if cat == "__HANDLED__":
                 logger.log_handler("TOOL", "ok-inline")
                 return

@@ -24,6 +24,7 @@ _CORRECT_PROMPT = """\
 - "сколько времени" / "который час"
 - "открой [приложение]" / "запусти [приложение]"
 - "найди [запрос]" / "загугли [запрос]"
+- "[вопрос]?" — фактический ответ голосом (даты, определения, анонсы)
 - "какая погода"
 - "громче" / "тише" / "убавь" / "прибавь"
 - "выключи компьютер"
@@ -41,7 +42,8 @@ _ROUTE_PROMPT = """\
 Категории:
 APPS — открыть приложение/папку (аргумент: название)
 MUSIC — музыка/трек (аргумент: название или пусто)
-SEARCH — найти/поиск (аргумент: запрос)
+SEARCH — найти/поиск в браузере (аргумент: запрос)
+QA — фактический вопрос, короткий ответ голосом (аргумент: вопрос)
 WEATHER — погода (аргумент: пусто)
 SHUTDOWN — выключить ПК (аргумент: пусто)
 LOCK — заблокировать (аргумент: пусто)
@@ -57,10 +59,31 @@ def is_wake_word(text: str) -> bool:
 
 
 def route_command(text: str) -> Tuple[str, str]:
+    from core.command_text import strip_wake_marks
+
+    text = strip_wake_marks(text)
     logger.log_system(f'Команда получена: "{text}"')
 
-    # ── Stage 0: бытовой диалог (до локального роутера) ─────────────────────
-    # Иначе «как дела» → PLANS, «ты кто» → SEARCH
+    if not text.strip():
+        return "UNKNOWN", ""
+
+    # ── Stage 1: fast local router (courtesy, activity, commands) ────────────
+    local = fallback_router.route(text)
+    logger.log_route(local[0], local[1], via="local")
+    if local[0] != "UNKNOWN":
+        return local
+
+    # ── Stage 1.5: фактический Q&A (если не попал в keyword-router) ─────────
+    if load_config().get("use_qa", True):
+        try:
+            from openjarvis.qa_service import is_factual_question
+            if is_factual_question(text):
+                logger.log_route("QA", text, via="qa-detect")
+                return "QA", text
+        except Exception as e:
+            logger.log_error(f"QA: {e}")
+
+    # ── Stage 2: бытовой диалог Gemma (не команды) ───────────────────────────
     if backend() == "ollama" and llm_enabled_for_chat():
         try:
             from openjarvis.chat_router import is_likely_chat, route_with_ollama_chat
@@ -71,13 +94,7 @@ def route_command(text: str) -> Tuple[str, str]:
         except Exception as e:
             logger.log_error(f"Ollama chat: {e}")
 
-    # ── Stage 1: fast local router ────────────────────────────────────────────
-    local = fallback_router.route(text)
-    logger.log_route(local[0], local[1], via="local")
-    if local[0] != "UNKNOWN":
-        return local
-
-    # ── Stage 2: Ollama Gemma 4 ───────────────────────────────────────────────
+    # ── Stage 3: Ollama Gemma 4 tools ─────────────────────────────────────────
     if backend() == "ollama":
         try:
             # Function calling — команды-действия

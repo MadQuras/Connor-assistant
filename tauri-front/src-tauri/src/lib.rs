@@ -7,7 +7,10 @@ use std::path::PathBuf;
 use std::process::Command;
 use tauri::menu::{Menu, MenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
-use tauri::{Manager, RunEvent};
+use tauri::{include_image, Manager, RunEvent};
+
+const TRAY_ICON: tauri::image::Image<'static> = include_image!("icons/taskbar-icon.png");
+const WINDOW_ICON: tauri::image::Image<'static> = include_image!("icons/window-icon.png");
 
 #[derive(Serialize)]
 struct ConfigView {
@@ -77,10 +80,16 @@ fn open_notes_db() -> Result<Connection, String> {
 }
 
 fn project_root() -> PathBuf {
+    if let Ok(root) = std::env::var("CONNOR_ROOT") {
+        let p = PathBuf::from(root);
+        if p.join("config.json").exists() || p.join("python-core").join("main.py").exists() {
+            return p;
+        }
+    }
     let mut p = std::env::current_exe().unwrap_or_default();
     for _ in 0..8 {
         p.pop();
-        if p.join("config.json").exists() {
+        if p.join("config.json").exists() || p.join("python-core").join("main.py").exists() {
             return p;
         }
     }
@@ -207,6 +216,17 @@ fn start_python_core() -> Result<(), String> {
         .map_err(|e| e.to_string())?;
     Ok(())
 }
+
+#[cfg(windows)]
+fn stop_python_core() {
+    let ps = "Get-CimInstance Win32_Process | Where-Object { ($_.Name -eq 'pythonw.exe' -or $_.Name -eq 'python.exe') -and $_.CommandLine -match 'python-core\\\\main\\.py' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }";
+    let _ = Command::new("powershell")
+        .args(["-NoProfile", "-NonInteractive", "-Command", ps])
+        .output();
+}
+
+#[cfg(not(windows))]
+fn stop_python_core() {}
 
 /// Inject a fake command into the pipeline log for debugging purposes.
 /// Writes a special entry that the Python core picks up via a trigger file.
@@ -365,15 +385,9 @@ pub fn run() {
             check_python_ready
         ])
         .setup(|app| {
-            // RK800 badge from bundle (icon.ico) — same icon for window + taskbar + tray.
-            let app_icon = app
-                .default_window_icon()
-                .cloned()
-                .ok_or_else(|| -> Box<dyn std::error::Error> {
-                    "Missing bundle icon — run npm run tauri build".into()
-                })?;
+            // Трей = raw as-is | Панель активных = window-icon (zoom центра)
             if let Some(window) = app.get_webview_window("main") {
-                let _ = window.set_icon(app_icon.clone());
+                let _ = window.set_icon(WINDOW_ICON.clone());
             }
 
             let show_i = MenuItem::with_id(app, "show", "Настройки", true, None::<&str>)?;
@@ -382,7 +396,7 @@ pub fn run() {
             let menu = Menu::with_items(app, &[&show_i, &start_i, &quit_i])?;
 
             let _tray = TrayIconBuilder::new()
-                .icon(app_icon.clone())
+                .icon(TRAY_ICON.clone())
                 .menu(&menu)
                 .show_menu_on_left_click(true)
                 .on_tray_icon_event(|tray, event| {
@@ -409,6 +423,7 @@ pub fn run() {
                         let _ = start_python_core();
                     }
                     "quit" => {
+                        stop_python_core();
                         app.exit(0);
                     }
                     _ => {}

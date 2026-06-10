@@ -9,11 +9,12 @@ from PyQt5.QtGui import QColor, QIcon, QPainter, QFont
 from PyQt5.QtWidgets import QApplication, QWidget
 
 
+from core.constants import CONFIG_PATH, ICON_PNG_PATH
+
+
 def _load_accent() -> QColor:
     try:
-        cfg = json.loads(
-            (Path(__file__).parents[3] / "config.json").read_text("utf-8")
-        )
+        cfg = json.loads(CONFIG_PATH.read_text("utf-8"))
         return QColor(cfg.get("accent_color", "#00B4D8"))
     except Exception:
         return QColor(0, 180, 216)
@@ -21,9 +22,7 @@ def _load_accent() -> QColor:
 
 BG = QColor(5, 5, 14, 220)
 
-_ICON_PATH = str(
-    Path(__file__).parents[3] / "tauri-front" / "src-tauri" / "icons" / "icon.png"
-)
+_ICON_PATH = str(ICON_PNG_PATH)
 
 
 class StatusBar(QWidget):

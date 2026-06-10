@@ -344,7 +344,7 @@ export function SettingsForm() {
           <div className="s-left">
             <div className="s-title">Музыкальный бэкенд</div>
             <div className="s-desc">
-              Lune — пауза и поиск; след./пред. трек — только Яндекс Музыка
+              Lune — пауза и поиск; Spotify и Яндекс — все команды
             </div>
           </div>
           <select
@@ -352,6 +352,7 @@ export function SettingsForm() {
             value={config.music_backend || 'yandex'}
             onChange={(e) => setConfig({ ...config, music_backend: e.target.value })}
           >
+            <option value="spotify">Spotify (все команды)</option>
             <option value="yandex">Яндекс Музыка (все команды)</option>
             <option value="lune">Lune (пауза, поиск)</option>
           </select>
@@ -417,7 +418,7 @@ export function SettingsForm() {
         </div>
         <div className="info-grid">
           <div className="info-r"><div className="info-k">МОДЕЛЬ</div><div className="info-v">КОННОР RK800</div></div>
-          <div className="info-r"><div className="info-k">ВЕРСИЯ</div><div className="info-v">1.2.1</div></div>
+          <div className="info-r"><div className="info-k">ВЕРСИЯ</div><div className="info-v">1.3.0</div></div>
           <div className="info-r"><div className="info-k">РАСПОЗНАВАНИЕ РЕЧИ</div><div className="info-v">FASTER-WHISPER</div></div>
           <div className="info-r"><div className="info-k">МАРШРУТИЗАТОР</div><div className="info-v">{(config.llm_backend || 'ollama') === 'ollama' ? 'OLLAMA TOOLS + LOCAL' : 'GEMINI + LOCAL'}</div></div>
           <div className="info-r"><div className="info-k">TTS</div><div className="info-v">{config.use_camb_tts ? 'CAMB.AI' : 'WAV CLIPS'}</div></div>

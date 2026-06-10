@@ -9,6 +9,8 @@ from PyQt5.QtCore import Qt, QTimer, QRect
 from PyQt5.QtGui import QColor, QFont, QIcon, QPainter, QPen, QPixmap
 from PyQt5.QtWidgets import QApplication, QWidget
 
+from core.constants import CONFIG_PATH, ICON_PNG_PATH
+
 _MONTHS = [
     "", "января", "февраля", "марта", "апреля", "мая", "июня",
     "июля", "августа", "сентября", "октября", "ноября", "декабря",
@@ -24,9 +26,7 @@ _GREETINGS = {
     "night":   "Доброй ночи",
 }
 
-_ICON_PATH = str(
-    Path(__file__).parents[3] / "tauri-front" / "src-tauri" / "icons" / "icon.png"
-)
+_ICON_PATH = str(ICON_PNG_PATH)
 
 _EYE_SIZE   = 160   # display size of the PNG eye (px)
 _EYE_ANIM_S = 1.6   # seconds for eye to open fully
@@ -34,9 +34,7 @@ _EYE_ANIM_S = 1.6   # seconds for eye to open fully
 
 def _load_accent() -> QColor:
     try:
-        cfg = json.loads(
-            (Path(__file__).parents[3] / "config.json").read_text("utf-8")
-        )
+        cfg = json.loads(CONFIG_PATH.read_text("utf-8"))
         return QColor(cfg.get("accent_color", "#00B4D8"))
     except Exception:
         return QColor(0, 180, 216)
@@ -83,9 +81,7 @@ class WelcomeScreen(QWidget):
             f"{_DAYS[now.weekday()]}, {now.day} {_MONTHS[now.month]} {now.year}"
         )
         try:
-            cfg = json.loads(
-                (Path(__file__).parents[3] / "config.json").read_text("utf-8")
-            )
+            cfg = json.loads(CONFIG_PATH.read_text("utf-8"))
             self._user = cfg.get("user_name", "ЛЕЙТЕНАНТ").upper()
         except Exception:
             self._user = "ЛЕЙТЕНАНТ"

@@ -10,11 +10,12 @@ from PyQt5.QtGui import (
 from PyQt5.QtWidgets import QApplication, QWidget
 
 
+from core.constants import CONFIG_PATH, ICON_PNG_PATH
+
+
 def _load_accent() -> QColor:
     try:
-        cfg = json.loads(
-            (Path(__file__).parents[3] / "config.json").read_text("utf-8")
-        )
+        cfg = json.loads(CONFIG_PATH.read_text("utf-8"))
         return QColor(cfg.get("accent_color", "#00B4D8"))
     except Exception:
         return QColor(0, 180, 216)
@@ -24,9 +25,7 @@ CYAN  = _load_accent()
 BG    = QColor(4, 5, 14)
 WHITE = QColor(224, 247, 255, 200)
 
-_ICON_PATH = str(
-    Path(__file__).parents[3] / "tauri-front" / "src-tauri" / "icons" / "icon.png"
-)
+_ICON_PATH = str(ICON_PNG_PATH)
 
 _MINI_EYE = 48   # size of static PNG icon above the title
 

@@ -15,10 +15,14 @@ from __future__ import annotations
 from typing import Callable, Dict
 
 from openjarvis.handlers import (
+    activity,
     apps,
+    courtesy,
+    dismiss,
     lock,
     music,
     plans,
+    qa,
     search,
     shutdown,
     time_cmd,
@@ -30,9 +34,13 @@ from openjarvis.handlers import (
 HandlerFn = Callable[..., None]
 
 HANDLERS: Dict[str, HandlerFn] = {
+    "COURTESY": courtesy.handle,
+    "DISMISS": dismiss.handle,
+    "ACTIVITY": activity.handle,
     "APPS": apps.handle,
     "MUSIC": music.handle,
     "SEARCH": search.handle,
+    "QA": qa.handle,
     "WEATHER": weather.handle,
     "PLANS": plans.handle,
     "TIME": time_cmd.handle,

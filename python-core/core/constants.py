@@ -10,15 +10,33 @@ constants.py — общие константы проекта (без логик
 Совет: не импортируйте torch/pygame сюда — только str, int, Path.
 """
 
+import os
 from enum import Enum
 from pathlib import Path
 
 # python-core/ — родитель core/
 CORE_ROOT = Path(__file__).resolve().parent.parent
-PROJECT_ROOT = CORE_ROOT.parent
+_DEFAULT_PROJECT_ROOT = CORE_ROOT.parent
+
+
+def _detect_project_root() -> Path:
+    """Portable root: CONNOR_ROOT env → default layout from __file__."""
+    env = os.environ.get("CONNOR_ROOT", "").strip()
+    if env:
+        p = Path(env).resolve()
+        if (p / "python-core" / "main.py").exists() or (p / "config.json").exists():
+            return p
+    return _DEFAULT_PROJECT_ROOT
+
+
+PROJECT_ROOT = _detect_project_root()
 MODELS_DIR = CORE_ROOT / "models"
 AUDIO_DIR = MODELS_DIR / "audio"
+CONFIG_PATH = PROJECT_ROOT / "config.json"
+ICONS_DIR = PROJECT_ROOT / "tauri-front" / "src-tauri" / "icons"
+ICON_PNG_PATH = ICONS_DIR / "icon.png"
 CONFIG_PATHS = (
+    CONFIG_PATH,
     PROJECT_ROOT / "config.json",
     CORE_ROOT / "config.json",
     Path("config.json"),
@@ -41,6 +59,7 @@ class ConnorState(str, Enum):
     """Состояния FSM — дублировать с state_machine или импортировать оттуда."""
 
     SLEEPING = "sleeping"
+    DISMISSED = "dismissed"   # «отойди пока» — только «Коннор, вернись»
     AWAKENED = "awakened"
     LISTENING = "listening"
     PROCESSING = "processing"

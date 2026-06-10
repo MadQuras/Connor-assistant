@@ -10,12 +10,12 @@ from PyQt5.QtCore import Qt, QTimer, QPropertyAnimation, QEasingCurve, QPoint
 from PyQt5.QtGui import QFont, QColor, QIcon
 from PyQt5.QtWidgets import QApplication, QLabel, QWidget, QVBoxLayout, QHBoxLayout, QFrame
 
+from core.constants import CONFIG_PATH, ICON_PNG_PATH
+
 WIDTH = 500
 HEIGHT = 360
-_ICON_PATH = str(
-    Path(__file__).parents[3] / "tauri-front" / "src-tauri" / "icons" / "icon.png"
-)
-_CFG_PATH = Path(__file__).parents[3] / "config.json"
+_ICON_PATH = str(ICON_PNG_PATH)
+_CFG_PATH = CONFIG_PATH
 
 
 def _load_accent() -> QColor:

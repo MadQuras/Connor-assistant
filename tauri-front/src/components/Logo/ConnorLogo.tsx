@@ -25,6 +25,7 @@ export function ConnorLogo({
 
   return (
     <img
+      key={src}
       src={src}
       width={size}
       height={size}

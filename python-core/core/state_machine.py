@@ -61,6 +61,20 @@ class StateMachine:
         self._cancel_timer()
         self._set(ConnorState.SLEEPING)
 
+    def on_dismiss(self) -> None:
+        """«Отойди пока» — игнорировать всё кроме «Коннор, вернись»."""
+        self._cancel_timer()
+        self._set(ConnorState.DISMISSED)
+
+    def on_return(self) -> None:
+        """«Вернись» после dismiss."""
+        self._cancel_timer()
+        self._set(ConnorState.AWAKENED)
+        self._arm_timer()
+
+    def is_dismissed(self) -> bool:
+        return self.state == ConnorState.DISMISSED
+
     def set_listening(self) -> None:
         self._set(ConnorState.LISTENING)
 

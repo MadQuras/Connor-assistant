@@ -27,4 +27,6 @@ start "" "%~dp0tauri-front\src-tauri\target\release\connor-tray-v2.exe"
 if exist "%LOCALAPPDATA%\Programs\Connor RK800\tauri-front\src-tauri\target\release\" (
   copy /Y "%~dp0tauri-front\src-tauri\target\release\connor-tray-v2.exe" "%LOCALAPPDATA%\Programs\Connor RK800\tauri-front\src-tauri\target\release\" >nul 2>&1
   copy /Y "%~dp0tauri-front\src-tauri\icons\icon.ico" "%LOCALAPPDATA%\Programs\Connor RK800\tauri-front\src-tauri\icons\" >nul 2>&1
+  copy /Y "%~dp0tauri-front\src-tauri\icons\app-icon.ico" "%LOCALAPPDATA%\Programs\Connor RK800\tauri-front\src-tauri\icons\" >nul 2>&1
+  del /Q "%LOCALAPPDATA%\Programs\Connor RK800\tauri-front\src-tauri\icons\tray-icon.png" >nul 2>&1
 )

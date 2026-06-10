@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { Shell } from './components/Layout/Shell';
 import { Dashboard } from './components/Dashboard/Dashboard';
 import { CommandsList } from './components/Commands/CommandsList';
@@ -7,33 +7,30 @@ import { DevicesStub } from './components/Devices/DevicesStub';
 import { SettingsForm } from './components/Settings/SettingsForm';
 import { GreetingScreen } from './components/Greeting/GreetingScreen';
 import { BootScreen } from './components/Boot/BootScreen';
-import { loadConfig, applyAccentColor } from './lib/tauri';
+import { ConfigProvider, useConfig } from './hooks/useConfig';
 
 type Scene = 'greeting' | 'boot' | 'main';
 
-export default function App() {
-  const [scene, setScene]       = useState<Scene | null>(null);
-  const [userName, setUserName] = useState<string | undefined>(undefined);
+function AppInner() {
+  const { config, ready } = useConfig();
+  const [scene, setScene] = useState<Scene | null>(null);
   const [showNotes, setShowNotes] = useState(false);
 
   useEffect(() => {
-    loadConfig().then((cfg) => {
-      if (cfg.accent_color) applyAccentColor(cfg.accent_color);
-      if (cfg.user_name) setUserName(cfg.user_name);
+    if (ready && scene === null) {
       setScene('greeting');
-    }).catch(() => {
-      setScene('greeting');
-    });
-  }, []);
+    }
+  }, [ready, scene]);
 
   const handleGreetingFinish = useCallback(() => setScene('boot'), []);
-  const handleBootFinish     = useCallback(() => setScene('main'), []);
+  const handleBootFinish = useCallback(() => setScene('main'), []);
 
-  if (scene === null) return null;
-  if (scene === 'greeting') return <GreetingScreen onFinish={handleGreetingFinish} userName={userName} />;
-  if (scene === 'boot')     return <BootScreen onFinish={handleBootFinish} />;
+  if (!ready || scene === null) return null;
+  if (scene === 'greeting') {
+    return <GreetingScreen onFinish={handleGreetingFinish} userName={config.user_name} />;
+  }
+  if (scene === 'boot') return <BootScreen onFinish={handleBootFinish} />;
 
-  // scene === 'main'
   return (
     <>
       <Shell onOpenNotes={() => setShowNotes(true)}>
@@ -49,5 +46,13 @@ export default function App() {
       </Shell>
       {showNotes && <NotesScreen onClose={() => setShowNotes(false)} />}
     </>
+  );
+}
+
+export default function App() {
+  return (
+    <ConfigProvider>
+      <AppInner />
+    </ConfigProvider>
   );
 }

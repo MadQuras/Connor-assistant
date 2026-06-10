@@ -4,7 +4,7 @@ from openjarvis.handlers.registry import get_handler
 from openjarvis.connor_response import respond
 
 # Categories whose handlers manage their own response entirely (wake, startup).
-_SELF_RESPONDING = {"WAKE"}
+_SELF_RESPONDING = {"WAKE", "COURTESY", "ACTIVITY", "QA", "DISMISS"}
 
 
 def dispatch(category: str, arg: str, original_text: str = "") -> None:

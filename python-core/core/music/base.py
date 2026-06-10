@@ -20,5 +20,8 @@ def get_player() -> MusicPlayer:
     if backend in ("yandex", "яндекс", "yandex_music"):
         from core.music.yandex import YandexMusicPlayer
         return YandexMusicPlayer()
+    if backend == "spotify":
+        from core.music.spotify import SpotifyMusicPlayer
+        return SpotifyMusicPlayer()
     from core.music.lune import LuneMusicPlayer
     return LuneMusicPlayer()

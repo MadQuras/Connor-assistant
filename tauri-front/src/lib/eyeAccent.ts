@@ -23,6 +23,20 @@ const EYE_BY_ACCENT: Record<string, string> = {
   '#FF79C6': eyePink,
 };
 
+/** Нормализация #RGB / #RRGGBB → канонический ACCENT_COLORS. */
+export function normalizeAccentHex(hex?: string): string {
+  if (!hex?.trim()) return ACCENT_COLORS[0];
+  let h = hex.trim().toUpperCase();
+  if (!h.startsWith('#')) h = `#${h}`;
+  if (h.length === 4) {
+    h = `#${h[1]}${h[1]}${h[2]}${h[2]}${h[3]}${h[3]}`;
+  }
+  const exact = ACCENT_COLORS.find((c) => c.toUpperCase() === h);
+  if (exact) return exact;
+  return ACCENT_COLORS[0];
+}
+
 export function eyeSrcForAccent(hex?: string): string {
-  return EYE_BY_ACCENT[hex ?? ''] ?? eyeCyan;
+  const key = normalizeAccentHex(hex);
+  return EYE_BY_ACCENT[key] ?? eyeCyan;
 }

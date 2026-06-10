@@ -18,6 +18,20 @@ def _clean_query(text: str) -> str:
     return text.strip()
 
 
+def open_google(query: str) -> bool:
+    """Открыть Google Search. Возвращает True при успехе."""
+    q = _clean_query(query).strip()
+    if not q:
+        return False
+    url = "https://www.google.com/search?q=" + urllib.parse.quote(q)
+    try:
+        subprocess.Popen(["cmd", "/c", "start", "", url], shell=False)
+        return True
+    except Exception as e:
+        print(f"[Search] browser open failed: {e}")
+        return False
+
+
 def handle(arg: str, original_text: str = "") -> None:
     query = (_clean_query(arg) if arg else _clean_query(original_text)).strip()
 
@@ -29,11 +43,7 @@ def handle(arg: str, original_text: str = "") -> None:
         audio_catalog.play_key("error_unknown")
         return
 
-    url = "https://www.google.com/search?q=" + urllib.parse.quote(query)
-    try:
-        subprocess.Popen(["cmd", "/c", "start", "", url], shell=False)
-    except Exception as e:
-        print(f"[Search] browser open failed: {e}")
+    open_google(query)
 
     try:
         d = MemoryStore().load()

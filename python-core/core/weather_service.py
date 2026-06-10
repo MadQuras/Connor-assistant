@@ -7,8 +7,19 @@ from __future__ import annotations
 import json
 import re
 import time
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Optional
+
+_RU_DAYS = ("Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс")
+_RU_DAYS_FULL = (
+    "понедельник", "вторник", "среда", "четверг",
+    "пятница", "суббота", "воскресенье",
+)
+_RU_MONTHS = (
+    "янв", "фев", "мар", "апр", "май", "июн",
+    "июл", "авг", "сен", "окт", "ноя", "дек",
+)
 
 import requests
 
@@ -119,8 +130,9 @@ def fetch_weather(city: str = "Москва", *, force: bool = False) -> Optiona
                 "precipitation,weather_code,wind_speed_10m"
             ),
             "hourly": "temperature_2m,weather_code",
+            "daily": "weather_code,temperature_2m_max,temperature_2m_min",
             "timezone": "auto",
-            "forecast_days": 1,
+            "forecast_days": 5,
         }
         with no_proxy_ctx():
             r = requests.get(_FORECAST_URL, params=params, timeout=15)
@@ -131,23 +143,59 @@ def fetch_weather(city: str = "Москва", *, force: bool = False) -> Optiona
         desc, icon, accent = _wmo(code)
 
         hourly_raw = data.get("hourly") or {}
-        times = hourly_raw.get("time") or []
-        temps = hourly_raw.get("temperature_2m") or []
-        codes = hourly_raw.get("weather_code") or []
-        hourly: list[dict[str, Any]] = []
-        for i in range(min(8, len(times))):
-            t = times[i]
+        h_times = hourly_raw.get("time") or []
+        h_temps = hourly_raw.get("temperature_2m") or []
+        h_codes = hourly_raw.get("weather_code") or []
+        hourly_by_date: dict[str, list[dict[str, Any]]] = {}
+        for i, t in enumerate(h_times):
+            day_key = t[:10] if len(t) >= 10 else ""
+            if not day_key:
+                continue
             hh = t[11:16] if len(t) >= 16 else t
-            c = int(codes[i]) if i < len(codes) else code
-            d, ic, _ = _wmo(c)
-            hourly.append(
+            c = int(h_codes[i]) if i < len(h_codes) else code
+            d, ic, hx = _wmo(c)
+            hourly_by_date.setdefault(day_key, []).append(
                 {
                     "time": hh,
-                    "temp": round(float(temps[i])) if i < len(temps) else 0,
+                    "temp": round(float(h_temps[i])) if i < len(h_temps) else 0,
                     "icon": ic,
                     "desc": d,
+                    "hex": hx,
                 }
             )
+
+        daily_raw = data.get("daily") or {}
+        d_dates = daily_raw.get("time") or []
+        d_max = daily_raw.get("temperature_2m_max") or []
+        d_min = daily_raw.get("temperature_2m_min") or []
+        d_codes = daily_raw.get("weather_code") or []
+
+        forecast: list[dict[str, Any]] = []
+        now = datetime.now()
+        for i, d_key in enumerate(d_dates[:5]):
+            try:
+                dt = datetime.strptime(d_key, "%Y-%m-%d")
+            except ValueError:
+                dt = now
+            dc = int(d_codes[i]) if i < len(d_codes) else code
+            dd, dic, dhex = _wmo(dc)
+            day_h = hourly_by_date.get(d_key, [])
+            forecast.append(
+                {
+                    "id": i,
+                    "day": _RU_DAYS[dt.weekday()],
+                    "day_full": _RU_DAYS_FULL[dt.weekday()],
+                    "date": f"{dt.day:02d} {_RU_MONTHS[dt.month - 1]}",
+                    "max": round(float(d_max[i])) if i < len(d_max) else 0,
+                    "min": round(float(d_min[i])) if i < len(d_min) else 0,
+                    "desc": dd,
+                    "icon": dic,
+                    "hex": dhex,
+                    "hourly": day_h,
+                }
+            )
+
+        today_hourly = forecast[0]["hourly"] if forecast else []
 
         result: dict[str, Any] = {
             "city_query": city,
@@ -160,7 +208,10 @@ def fetch_weather(city: str = "Москва", *, force: bool = False) -> Optiona
             "desc": desc,
             "icon": icon,
             "accent_hex": accent,
-            "hourly": hourly,
+            "current_icon": icon,
+            "current_hex": accent,
+            "hourly": today_hourly,
+            "forecast": forecast,
             "fetched_at": time.time(),
         }
         MODELS_DIR.mkdir(parents=True, exist_ok=True)

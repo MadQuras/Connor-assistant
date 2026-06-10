@@ -1,16 +1,9 @@
 """
 player_detector.py — авто-детект установленного музыкального плеера.
 
-Вызывается один раз при старте из main.py.  Проверяет наличие Lune и
-Яндекс Музыки на диске и обновляет music_backend в config.json если он
-ещё не выбран вручную.
-
-Логика:
-  - Только Lune установлен          → music_backend = "lune"
-  - Только Яндекс Музыка установлена → music_backend = "yandex"
-  - Оба установлены, config пустой   → music_backend = "lune" (приоритет
-    оффлайн-плееру) + сообщение в overlay «Оба плеера найдены. Выберите в Настройках.»
-  - Ничего нет                       → не трогаем config, логируем
+Вызывается один раз при старте из main.py.  Проверяет наличие Lune,
+Яндекс Музыки и Spotify на диске и обновляет music_backend в config.json
+если он ещё не выбран вручную.
 """
 
 from __future__ import annotations
@@ -22,8 +15,10 @@ from typing import Optional
 from core import logger
 from core.config_loader import load_config, save_config
 
+_VALID_BACKENDS = ("lune", "yandex", "spotify")
+_FALLBACK_ORDER = ("spotify", "yandex", "lune")
 
-# ── Пути Lune ─────────────────────────────────────────────────────────────────
+
 def _lune_paths() -> list[Path]:
     local = os.environ.get("LOCALAPPDATA", "")
     appdata = os.environ.get("APPDATA", "")
@@ -37,16 +32,13 @@ def _lune_installed() -> bool:
     return any(p.exists() for p in _lune_paths())
 
 
-# ── Пути Яндекс Музыки (десктопное приложение) ───────────────────────────────
 def _yandex_paths() -> list[Path]:
     local = os.environ.get("LOCALAPPDATA", "")
     appdata = os.environ.get("APPDATA", "")
     return [
-        # Официальное десктопное приложение Яндекс Музыки
         Path(local) / "Programs" / "YandexMusic" / "YandexMusic.exe",
         Path(local) / "YandexMusic" / "YandexMusic.exe",
         Path(local) / "Yandex" / "YandexMusic" / "YandexMusic.exe",
-        # Start Menu ярлыки
         Path(appdata) / "Microsoft" / "Windows" / "Start Menu" / "Programs" / "YandexMusic.lnk",
         Path(appdata) / "Microsoft" / "Windows" / "Start Menu" / "Programs" / "Яндекс Музыка.lnk",
     ]
@@ -56,79 +48,92 @@ def _yandex_installed() -> bool:
     return any(p.exists() for p in _yandex_paths())
 
 
-# ── Публичный API ─────────────────────────────────────────────────────────────
+def _spotify_installed() -> bool:
+    exe = Path(os.environ.get("APPDATA", "")) / "Spotify" / "Spotify.exe"
+    return exe.is_file()
+
+
+def _installed_backends() -> list[str]:
+    found: list[str] = []
+    if _lune_installed():
+        found.append("lune")
+    if _yandex_installed():
+        found.append("yandex")
+    if _spotify_installed():
+        found.append("spotify")
+    return found
+
+
+def _pick_auto_backend(installed: list[str]) -> str:
+    if len(installed) == 1:
+        return installed[0]
+    if "lune" in installed:
+        return "lune"
+    if "spotify" in installed:
+        return "spotify"
+    return "yandex"
+
+
+def _pick_fallback(installed: list[str]) -> str:
+    for name in _FALLBACK_ORDER:
+        if name in installed:
+            return name
+    return installed[0]
+
 
 def detect_and_apply() -> Optional[str]:
     """
     Определить установленный плеер и записать music_backend в config.json.
 
-    Возвращает итоговое значение music_backend ('lune' | 'yandex' | None).
+    Возвращает итоговое значение music_backend ('lune' | 'yandex' | 'spotify' | None).
     Не перезаписывает config, если пользователь уже выбрал бэкенд вручную.
     """
     cfg = load_config()
     current = (cfg.get("music_backend") or "").strip().lower()
-
-    lune = _lune_installed()
-    yandex = _yandex_installed()
+    installed = _installed_backends()
 
     logger.log_system(
-        f"[PlayerDetector] Lune={lune}, Yandex={yandex}, config={current!r}"
+        f"[PlayerDetector] installed={installed}, config={current!r}"
     )
 
-    if not lune and not yandex:
+    if not installed:
         logger.log_system(
             "[PlayerDetector] Ни один плеер не найден. "
-            "Установите Lune или Яндекс Музыку."
+            "Установите Lune, Яндекс Музыку или Spotify."
         )
         return current or None
 
-    # Если пользователь уже сделал осознанный выбор — не трогаем
-    if current in ("lune", "yandex"):
-        # Но проверяем, что выбранный плеер действительно есть
-        if current == "lune" and not lune:
-            logger.log_system(
-                "[PlayerDetector] config=lune, но Lune не установлен — "
-                "переключаю на yandex"
-            )
-            save_config({"music_backend": "yandex"})
-            return "yandex"
-        if current == "yandex" and not yandex:
-            logger.log_system(
-                "[PlayerDetector] config=yandex, но Яндекс Музыка не установлена — "
-                "переключаю на lune"
-            )
-            save_config({"music_backend": "lune"})
-            return "lune"
-        return current
-
-    # music_backend пуст или содержит что-то нераспознанное — авто-выбор
-    if lune and not yandex:
-        logger.log_system("[PlayerDetector] Авто-выбор: lune")
-        save_config({"music_backend": "lune"})
-        return "lune"
-
-    if yandex and not lune:
-        logger.log_system("[PlayerDetector] Авто-выбор: yandex")
-        save_config({"music_backend": "yandex"})
-        return "yandex"
-
-    # Оба установлены — выбираем Lune как оффлайн-плеер по умолчанию
-    logger.log_system(
-        "[PlayerDetector] Найдены оба плеера — выбираю Lune по умолчанию. "
-        "Для смены откройте Настройки."
-    )
-    save_config({"music_backend": "lune"})
-
-    # Покажем подсказку через overlay (если уже инициализирован)
-    try:
-        from core.overlay import get_overlay
-        ov = get_overlay()
-        ov.show_text(
-            "Найдены Lune и Яндекс Музыка. Выберите плеер в Настройках.",
-            tag="СИСТЕМА",
-            auto_hide_ms=8000,
+    if current in _VALID_BACKENDS:
+        if current in installed:
+            return current
+        fallback = _pick_fallback(installed)
+        logger.log_system(
+            f"[PlayerDetector] config={current}, но плеер не установлен — "
+            f"переключаю на {fallback}"
         )
-    except Exception:
-        pass
+        save_config({"music_backend": fallback})
+        return fallback
 
-    return "lune"
+    chosen = _pick_auto_backend(installed)
+    logger.log_system(f"[PlayerDetector] Авто-выбор: {chosen}")
+    save_config({"music_backend": chosen})
+
+    if len(installed) > 1:
+        names = {
+            "lune": "Lune",
+            "yandex": "Яндекс Музыка",
+            "spotify": "Spotify",
+        }
+        found = ", ".join(names[b] for b in installed)
+        try:
+            from core.overlay import get_overlay
+
+            get_overlay().show_text(
+                f"Найдены плееры: {found}. Выберите в Настройках.",
+                tag="СИСТЕМА",
+                auto_hide_ms=8000,
+            )
+        except Exception:
+            pass
+
+    return chosen

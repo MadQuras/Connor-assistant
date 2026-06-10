@@ -12,42 +12,20 @@ search_and_play():
 
 from __future__ import annotations
 
-import ctypes
 import time
 
 import pyautogui
 
 from core import logger
+from core.music.win_media import (
+    APPCOMMAND_MEDIA_NEXTTRACK,
+    APPCOMMAND_MEDIA_PLAY_PAUSE,
+    APPCOMMAND_MEDIA_PREVIOUSTRACK,
+    broadcast_media,
+)
 from core.ocr.find_click import find_text_click_point
 
 WINDOW_HINTS = ("yandex", "яндекс", "music.yandex", "музыка", "яндекс музыка")
-
-# WM_APPCOMMAND constants
-WM_APPCOMMAND = 0x0319
-APPCOMMAND_MEDIA_PLAY_PAUSE = 14
-APPCOMMAND_MEDIA_NEXTTRACK  = 11
-APPCOMMAND_MEDIA_PREVIOUSTRACK = 12
-
-HWND_BROADCAST = 0xFFFF
-
-
-def _broadcast_media(appcommand: int) -> None:
-    """Broadcast WM_APPCOMMAND to all top-level windows.
-
-    Uses SendNotifyMessageW (not SendMessageW) so the call returns immediately
-    without waiting for every window to process the message.  SendMessageW with
-    HWND_BROADCAST blocks until ALL windows reply, which can take 10-30 s when
-    any window is busy — freezing the STT dispatch thread and filling the queue.
-    """
-    try:
-        ctypes.windll.user32.SendNotifyMessageW(
-            HWND_BROADCAST,
-            WM_APPCOMMAND,
-            0,
-            appcommand << 16,
-        )
-    except Exception as exc:
-        logger.log_error(f"[YandexMusic] WM_APPCOMMAND broadcast failed: {exc}")
 
 
 class YandexMusicPlayer:
@@ -74,20 +52,20 @@ class YandexMusicPlayer:
     # ── Playback control — no browser, no ensure_open ─────────────────────────
 
     def play_pause(self) -> None:
-        _broadcast_media(APPCOMMAND_MEDIA_PLAY_PAUSE)
+        broadcast_media(APPCOMMAND_MEDIA_PLAY_PAUSE)
 
     def pause(self) -> None:
-        _broadcast_media(APPCOMMAND_MEDIA_PLAY_PAUSE)
+        broadcast_media(APPCOMMAND_MEDIA_PLAY_PAUSE)
 
     def resume(self) -> None:
-        _broadcast_media(APPCOMMAND_MEDIA_PLAY_PAUSE)
+        broadcast_media(APPCOMMAND_MEDIA_PLAY_PAUSE)
 
     def next_track(self) -> bool:
-        _broadcast_media(APPCOMMAND_MEDIA_NEXTTRACK)
+        broadcast_media(APPCOMMAND_MEDIA_NEXTTRACK)
         return True
 
     def prev_track(self) -> bool:
-        _broadcast_media(APPCOMMAND_MEDIA_PREVIOUSTRACK)
+        broadcast_media(APPCOMMAND_MEDIA_PREVIOUSTRACK)
         return True
 
     # ── Search — only within already-open window ──────────────────────────────

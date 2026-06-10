@@ -1,4 +1,4 @@
-#Requires -Version 5.1
+﻿#Requires -Version 5.1
 <#
 .SYNOPSIS
     Connor RK800 — Installer
@@ -20,7 +20,7 @@ function Write-Header {
     Write-Host ""
     Write-Host "  ╔══════════════════════════════════════════════════════╗" -ForegroundColor Cyan
     Write-Host "  ║        CONNOR RK800  —  CYBERLIFE INSTALLER          ║" -ForegroundColor Cyan
-    Write-Host "  ║              Android RK800  v1.0.0                   ║" -ForegroundColor Cyan
+    Write-Host "  ║              Android RK800  v1.3.0                   ║" -ForegroundColor Cyan
     Write-Host "  ╚══════════════════════════════════════════════════════╝" -ForegroundColor Cyan
     Write-Host ""
 }
@@ -74,9 +74,9 @@ Write-Section "PYTHON 3.11"
 
 $PYTHON = $null
 $candidates = @(
-    "C:\Users\$env:USERNAME\AppData\Local\Programs\Python\Python311\python.exe",
+    "$env:LOCALAPPDATA\Programs\Python\Python311\python.exe",
     "C:\Python311\python.exe",
-    "C:\Program Files\Python311\python.exe"
+    "$env:ProgramFiles\Python311\python.exe"
 )
 foreach ($c in $candidates) {
     if (Test-Path $c) { $PYTHON = $c; break }
@@ -94,6 +94,11 @@ if (-not $PYTHON) {
 if ($PYTHON) {
     $ver = & $PYTHON --version 2>&1
     Write-OK "Python найден: $ver  ($PYTHON)"
+    $pythonw = $PYTHON -replace '\\python\.exe$', '\pythonw.exe'
+    if (Test-Path $pythonw) {
+        Set-Content -Path (Join-Path $ROOT "python_path.txt") -Value $pythonw -Encoding ASCII -NoNewline
+        Write-OK "python_path.txt → $pythonw"
+    }
 } else {
     Write-Warn "Python 3.11 не найден."
     Write-Host ""
@@ -193,10 +198,43 @@ if (Test-Path $CFG) {
 } elseif (Test-Path $CFG_EX) {
     Copy-Item $CFG_EX $CFG
     Write-OK "config.json создан из шаблона."
-    Write-Warn "Откройте config.json и вставьте ваш Gemini API ключ в поле 'gemini_api_key'."
-    Write-Host "  Получить ключ: https://aistudio.google.com/app/apikey" -ForegroundColor Cyan
+    Write-OK "ИИ: llm_backend=ollama, модель gemma4:e4b (установка на следующем шаге)."
 } else {
     Write-Warn "config.example.json не найден. Создайте config.json вручную по образцу из README."
+}
+
+# ── Step 6b: Ollama + Gemma 4 ───────────────────────────────────────────────
+
+Write-Section "OLLAMA + GEMMA 4 (ИИ КОННОРА)"
+
+Write-Host "  Connor использует локальную Gemma через Ollama." -ForegroundColor White
+Write-Host "  Будет установлен Ollama и скачана модель gemma4:e4b (~несколько ГБ)." -ForegroundColor DarkGray
+Write-Host ""
+$ollamaAns = Read-Host "  Установить Ollama и gemma4:e4b сейчас? (Y/n)"
+if ($ollamaAns -ne 'n' -and $ollamaAns -ne 'N') {
+    $ollamaScript = Join-Path $ROOT "scripts\install_ollama.ps1"
+    if (Test-Path $ollamaScript) {
+        $env:CONNOR_PYTHON = $PYTHON
+        try {
+            & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $ollamaScript
+            if ($LASTEXITCODE -eq 0) {
+                Write-OK "Ollama и Gemma 4 готовы"
+            } else {
+                Write-Warn "Ollama/Gemma не установлены полностью — Connor будет работать без ИИ."
+                Write-Host "  Повторить позже: install_ollama.bat" -ForegroundColor Gray
+            }
+        } catch {
+            Write-Warn "Ошибка установки Ollama: $_"
+            Write-Host "  Повторить: install_ollama.bat" -ForegroundColor Gray
+        } finally {
+            Remove-Item Env:CONNOR_PYTHON -ErrorAction SilentlyContinue
+        }
+    } else {
+        Write-Warn "scripts\install_ollama.ps1 не найден — пропуск."
+    }
+} else {
+    Write-Warn "Ollama пропущен. Без него — только локальные команды (без диалога Gemma)."
+    Write-Host "  Установить позже: install_ollama.bat" -ForegroundColor Gray
 }
 
 # ── Step 7: models папки ─────────────────────────────────────────────────────
@@ -224,26 +262,16 @@ if (-not (Test-Path $flagFile)) {
 
 Write-Section "ЯРЛЫК НА РАБОЧЕМ СТОЛЕ"
 
-$vbsPath = Join-Path $ROOT "Connor.vbs"
-if (Test-Path $vbsPath) {
-    $desktop  = [System.Environment]::GetFolderPath('Desktop')
-    $lnkPath  = Join-Path $desktop "Connor.lnk"
+$shortcutScript = Join-Path $ROOT "scripts\create_shortcut.ps1"
+if (Test-Path $shortcutScript) {
     try {
-        $wsh = New-Object -ComObject WScript.Shell
-        $lnk = $wsh.CreateShortcut($lnkPath)
-        $lnk.TargetPath       = $vbsPath
-        $lnk.WorkingDirectory = $ROOT
-        $lnk.Description      = "Connor RK800 — Voice Assistant"
-        # Use Tauri icon if available
-        $icoSearch = Join-Path $ROOT "tauri-front\src-tauri\icons\icon.ico"
-        if (Test-Path $icoSearch) { $lnk.IconLocation = $icoSearch }
-        $lnk.Save()
-        Write-OK "Ярлык создан: $lnkPath"
+        & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $shortcutScript -Root $ROOT
+        Write-OK "Ярлык Connor RK800.lnk (icon.ico)"
     } catch {
         Write-Warn "Не удалось создать ярлык: $_"
     }
 } else {
-    Write-Warn "Connor.vbs не найден — ярлык не создан."
+    Write-Warn "scripts\create_shortcut.ps1 не найден — ярлык не создан."
 }
 
 # ── Step 9: Pre-built EXE check ───────────────────────────────────────────────
@@ -269,11 +297,12 @@ Write-Host "  ║             УСТАНОВКА ЗАВЕРШЕНА             
 Write-Host "  ╚══════════════════════════════════════════════════════╝" -ForegroundColor Green
 Write-Host ""
 Write-Host "  Следующие шаги:" -ForegroundColor White
-Write-Host "  1. Откройте config.json — вставьте Gemini API ключ" -ForegroundColor Gray
-Write-Host "  2. Убедитесь что в models/audio/ есть WAV файлы Коннора" -ForegroundColor Gray
-Write-Host "  3. Запустите Connor.vbs двойным кликом" -ForegroundColor Gray
+Write-Host "  1. Убедитесь что Ollama запущен (иконка в трее) и gemma4:e4b установлена" -ForegroundColor Gray
+Write-Host "  2. Для точных ответов на вопросы — добавьте gemini_api_key в config.json" -ForegroundColor Gray
+Write-Host "  3. Убедитесь что в models/audio/ есть WAV файлы Коннора" -ForegroundColor Gray
+Write-Host "  4. Запустите Connor.vbs двойным кликом" -ForegroundColor Gray
 Write-Host ""
-Write-Host "  Документация: TUTORIAL_VAD  |  README.md" -ForegroundColor DarkGray
+Write-Host "  Без Ollama: install_ollama.bat  |  Проверка ИИ: py python-core\scripts\verify_gemma.py" -ForegroundColor DarkGray
 Write-Host ""
 
 Read-Host "  Нажмите Enter для завершения"

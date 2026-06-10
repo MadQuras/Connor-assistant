@@ -23,6 +23,7 @@ python-core/models/notes.db
 python-core/models/tts_cache/
 python-core/models/gemma_status.json
 python-core/models/weather_cache.json
+python-core/models/activity_state.json
 
 # ── Whisper / Torch model cache ───────────────────────────────────
 *.pt
@@ -43,6 +44,9 @@ tauri-front/.next/
 *.swp
 .DS_Store
 Thumbs.db
+
+# ── Local dev / test artifacts ────────────────────────────────────
+_test_*.png
 
 # ── IDE ───────────────────────────────────────────────────────────
 .vscode/settings.json

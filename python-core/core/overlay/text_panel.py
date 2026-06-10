@@ -14,10 +14,10 @@ WIDTH    = 520
 MAX_H    = 420
 MIN_H    = 110
 
-_ICON_PATH = str(
-    Path(__file__).parents[3] / "tauri-front" / "src-tauri" / "icons" / "icon.png"
-)
-_CFG_PATH = Path(__file__).parents[3] / "config.json"
+from core.constants import CONFIG_PATH, ICON_PNG_PATH
+
+_ICON_PATH = str(ICON_PNG_PATH)
+_CFG_PATH = CONFIG_PATH
 
 # ─── Accent colour from config ──────────────────────────────────
 

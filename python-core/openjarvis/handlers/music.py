@@ -37,12 +37,11 @@ def handle(arg: str, original_text: str = "") -> None:
         if player.next_track():
             _say("Следующий трек")
         else:
-            show_connor(
-                "Lune не переключает треки. В настройках выберите Яндекс Музыку."
-            ) if llm_ui else ov.show_text(
-                "Lune не переключает треки. В настройках выберите Яндекс Музыку.",
-                tag="КОННОР",
+            msg = (
+                "Lune не переключает треки. "
+                "В настройках выберите Spotify или Яндекс Музыку."
             )
+            show_connor(msg) if llm_ui else ov.show_text(msg, tag="КОННОР")
         return
 
     if any(x in text for x in (
@@ -68,12 +67,11 @@ def handle(arg: str, original_text: str = "") -> None:
         if player.prev_track():
             _say("Предыдущий трек")
         else:
-            show_connor(
-                "Lune не переключает треки. В настройках выберите Яндекс Музыку."
-            ) if llm_ui else ov.show_text(
-                "Lune не переключает треки. В настройках выберите Яндекс Музыку.",
-                tag="КОННОР",
+            msg = (
+                "Lune не переключает треки. "
+                "В настройках выберите Spotify или Яндекс Музыку."
             )
+            show_connor(msg) if llm_ui else ov.show_text(msg, tag="КОННОР")
         return
 
     if text:

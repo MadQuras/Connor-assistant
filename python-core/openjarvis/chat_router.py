@@ -62,6 +62,11 @@ _CHAT_SYSTEM = """\
 
 def is_likely_chat(text: str) -> bool:
     """Быстро: похоже на бытовой диалог, а не на команду."""
+    from openjarvis.qa_service import is_factual_question
+
+    if is_factual_question(text):
+        return False
+
     low = text.lower().strip()
     if not low or len(low) < 2:
         return False

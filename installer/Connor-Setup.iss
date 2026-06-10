@@ -5,7 +5,7 @@
 ; ╚══════════════════════════════════════════════════════════════╝
 
 #define AppName      "Connor RK800"
-#define AppVersion   "1.2.1"
+#define AppVersion   "1.3.0"
 #define AppPublisher "MadQuras"
 #define AppURL       "https://github.com/MadQuras/Connor-assistant"
 #define SrcRoot      ".."

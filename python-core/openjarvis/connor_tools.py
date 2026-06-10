@@ -128,6 +128,23 @@ CONNOR_TOOLS: list[dict[str, Any]] = [
     {
         "type": "function",
         "function": {
+            "name": "answer_question",
+            "description": (
+                "Ответить на вопрос пользователя одним коротким предложением "
+                "(факты, даты, определения, анонсы). Не открывать браузер."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "question": {"type": "string", "description": "Вопрос пользователя."},
+                },
+                "required": ["question"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "web_search",
             "description": "Поиск в Google по запросу.",
             "parameters": {
@@ -324,6 +341,20 @@ def execute_tool(name: str, args: dict[str, Any], original_text: str = "") -> Tu
 
     if name == "web_search":
         return "SEARCH", str(a.get("query", ""))
+
+    if name == "answer_question":
+        q = str(a.get("question", "") or original_text).strip()
+        from openjarvis.qa_service import resolve_question, QAResultKind
+
+        result = resolve_question(q)
+        if result.kind == QAResultKind.ANSWER and result.text:
+            speak_direct(result.text)
+        else:
+            from openjarvis.handlers import search
+
+            search.handle(result.query or q, original_text=original_text)
+            speak_direct("Открою Google — там будет подробный ответ")
+        return _HANDLED
 
     if name == "get_weather":
         from core.weather_service import extract_city, fetch_weather

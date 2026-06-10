@@ -15,8 +15,18 @@ _SEARCH_KW = {
     "поиcк", "поиcки", "поискал",
     "загуглил", "гуглики", "гукли",
     "search", "find", "look up", "lookup",
-    # Informal
-    "скажи про", "расскажи про", "что такое", "кто такой", "как найти",
+    # Informal — только явный поиск в браузере
+    "как найти",
+}
+
+# ─── QA keywords (краткий фактический ответ голосом) ────────────────────────
+_QA_KW = {
+    "что такое", "кто такой", "кто такая",
+    "когда", "где", "почему", "зачем",
+    "какой", "какая", "какие", "как долго", "во сколько",
+    "скажи про", "расскажи про", "расскажи о", "скажи о",
+    "анонс", "дата выхода", "дата релиза", "когда выйдет", "когда выходит",
+    "сколько стоит", "сколько лет", "в каком году", "как называется",
 }
 
 # ─── OPEN/APPS keywords ─────────────────────────────────────────────────────
@@ -92,6 +102,30 @@ _MUSIC_KW = {
     "поставь что-нибудь", "включи что-нибудь",
     "дальше", "вперёд", "вперед",
     "назад трек", "предыдущую", "следующую",
+}
+
+# ─── COURTESY / domestic ─────────────────────────────────────────────────────
+_COURTESY_THANKS = {
+    "спасибо", "благодарю", "благодарность", "спс", "мерси", "thanks", "thank you",
+    "сенкс", "сенкью",
+}
+_COURTESY_HELLO = {
+    "привет", "здравствуй", "здравствуйте", "хай", "hello", "hi",
+    "доброе утро", "добрый день", "добрый вечер", "доброй ночи",
+}
+_COURTESY_BYE = {
+    "пока", "до свидания", "до свиданья", "увидимся", "прощай", "bye", "goodbye",
+}
+_COURTESY_PRAISE = {
+    "молодец", "отлично", "класс", "супер", "круто", "красавчик", "умница",
+}
+
+# ─── ACTIVITY keywords ──────────────────────────────────────────────────────
+_ACTIVITY_KW = {
+    "активность", "активности", "моя активность",
+    "сколько работал", "сколько я работал", "сколько за компьютером",
+    "время за компьютером", "время за пк", "сколько за пк",
+    "фокус тайм", "focus time", "сколько сегодня",
 }
 
 # ─── WEATHER keywords ───────────────────────────────────────────────────────
@@ -200,8 +234,33 @@ _SHUTDOWN_KW = {
 }
 
 
+def _courtesy_kind(low: str) -> str | None:
+    if _contains_any(low, _COURTESY_THANKS):
+        return "thanks"
+    if _contains_any(low, _COURTESY_HELLO):
+        return "hello"
+    if _contains_any(low, _COURTESY_BYE):
+        return "bye"
+    if _contains_any(low, _COURTESY_PRAISE):
+        return "praise"
+    return None
+
+
 def route(text: str) -> Tuple[str, str]:
     low = text.lower().strip()
+
+    # ── DISMISS («отойди пока») — до courtesy (иначе «пока» = bye) ──
+    if _is_dismiss(low):
+        return "DISMISS", ""
+
+    # ── COURTESY (бытовые фразы) ─────────────────────────────────
+    courtesy = _courtesy_kind(low)
+    if courtesy:
+        return "COURTESY", courtesy
+
+    # ── ACTIVITY (время за ПК) ───────────────────────────────────
+    if _contains_any(low, _ACTIVITY_KW):
+        return "ACTIVITY", ""
 
     # ── Recycle bin (before generic APPS) ────────────────────────
     if "корзин" in low and any(x in low for x in ("очист", "удали", "очисти", "пусти", "почисти")):
@@ -215,12 +274,19 @@ def route(text: str) -> Tuple[str, str]:
     if "рабоч" in low and any(x in low for x in ("папк", "стол", "desktop")):
         return "APPS", "рабочая папка"
 
-    # ── SEARCH ───────────────────────────────────────────────────
+    # ── WEATHER (до QA — «какая погода» не уходит в Q&A) ─────────
+    if _is_weather(low):
+        return "WEATHER", ""
+
+    # ── QA (краткий фактический ответ) ───────────────────────────
+    if _is_qa(low):
+        return "QA", _qa_arg(low)
+
+    # ── SEARCH (открыть браузер) ─────────────────────────────────
     if _contains_any(low, _SEARCH_KW):
         return "SEARCH", _after(low, (
             "найди", "найти", "поищи", "загугли", "загуглить",
             "гугл", "ищи", "search", "find",
-            "скажи про", "расскажи про", "что такое", "кто такой",
         ))
 
     # ── VOLUME (before APPS to avoid "включи" conflict) ──────────
@@ -256,10 +322,6 @@ def route(text: str) -> Tuple[str, str]:
         # If no verb was found but a known app name is in text, use full text
         return "APPS", remainder or low
 
-    # ── WEATHER ──────────────────────────────────────────────────
-    if _contains_any(low, _WEATHER_KW):
-        return "WEATHER", ""
-
     # ── TIME ─────────────────────────────────────────────────────
     if _contains_any(low, _TIME_KW):
         return "TIME", ""
@@ -277,6 +339,43 @@ def route(text: str) -> Tuple[str, str]:
 
 
 # ─── Helpers ─────────────────────────────────────────────────────────────────
+
+def _is_dismiss(low: str) -> bool:
+    from core.dismiss import is_dismiss_phrase
+    return is_dismiss_phrase(low)
+
+
+def _is_weather(low: str) -> bool:
+    return _contains_any(low, _WEATHER_KW) or "погод" in low
+
+
+def _is_qa(low: str) -> bool:
+    """Фактический вопрос — не время/погода/болтовня."""
+    if _is_weather(low):
+        return False
+    if "?" in low:
+        if any(x in low for x in ("сколько времени", "который час", "какое время", "какая погода")):
+            return False
+        return True
+    if _contains_any(low, _QA_KW):
+        if any(x in low for x in ("кто ты", "что ты", "как дела", "как ты")):
+            return False
+        return True
+    if re.match(r"^(когда|где|сколько|какой|какая|какие|почему|зачем)\b", low):
+        if "сколько" in low and any(x in low for x in ("времени", "час", "минут")):
+            return False
+        return True
+    return False
+
+
+def _qa_arg(low: str) -> str:
+    """Текст вопроса без лишних префиксов."""
+    stripped = _after(low, (
+        "скажи про", "расскажи про", "расскажи о", "скажи о",
+        "что такое", "кто такой", "кто такая",
+    ))
+    return stripped or low
+
 
 def _contains_any(text: str, keywords: set) -> bool:
     """True if *any* keyword is a substring of text."""
